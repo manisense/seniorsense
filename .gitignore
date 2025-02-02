@@ -1,0 +1,71 @@
+# ---------------------------
+# Dependency directories
+# ---------------------------
+node_modules/
+.bolt/
+bower_components/
+
+# ---------------------------
+# Build and output directories
+# ---------------------------
+# For React Native / Expo:
+android/app/build/
+ios/build/
+ios/Pods/
+
+# For NativeScript:
+platforms/
+
+# Common build folders
+dist/
+build/
+.tmp/
+temp/
+
+# ---------------------------
+# Expo specific
+# ---------------------------
+.expo/
+.expo-shared/
+
+# ---------------------------
+# Caches and logs
+# ---------------------------
+# Metro bundler cache (React Native)
+metro-cache/
+
+# Log files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+lerna-debug.log*
+
+# ---------------------------
+# OS / Editor files
+# ---------------------------
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Editor directories and files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+
+# ---------------------------
+# Environment and local config files
+# ---------------------------
+.env
+.env.*.local
+
+# ---------------------------
+# Miscellaneous
+# ---------------------------
+# If you are not using or versioning these, ignore them:
+.stackblitzrc
