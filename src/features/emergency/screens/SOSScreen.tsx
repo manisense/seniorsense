@@ -15,6 +15,29 @@ import { MD3LightTheme, PaperProvider } from 'react-native-paper';
 const STORAGE_KEY = 'emergency_contacts';
 const MAX_CONTACTS = 5;
 
+const checkPermissions = async () => {
+  if (Platform.OS === 'web') {
+    return true;
+  }
+
+  if (Platform.OS === 'android') {
+    try {
+      const { NativeModules } = require('react-native');
+      const { AndroidSmsModule } = NativeModules;
+      
+      if (AndroidSmsModule && AndroidSmsModule.requestSMSPermission) {
+        const granted = await AndroidSmsModule.requestSMSPermission();
+        return granted;
+      }
+    } catch (error) {
+      console.error('SMS permission check failed:', error);
+    }
+  }
+
+  // For iOS or if Android native module fails
+  return true;
+};
+
 const SOSScreen = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
@@ -151,9 +174,28 @@ const SOSScreen = () => {
 
   const handleSOS = async () => {
     if (contacts.length === 0) {
-      Alert.alert('No Contacts', 'Please add emergency contacts first');
+      Alert.alert(t('sos.error'), t('sos.noContacts'));
       return;
     }
+
+    if (Platform.OS === 'android') {
+      const hasPermission = await checkPermissions();
+      if (!hasPermission) {
+        Alert.alert(
+          t('sos.permissionsNeeded'),
+          t('sos.smsPermissionRequired'),
+          [
+            { text: t('sos.cancel'), style: 'cancel' },
+            { 
+              text: t('sos.openSettings'),
+              onPress: () => Linking.openSettings()
+            }
+          ]
+        );
+        return;
+      }
+    }
+
     setConfirmDialog(true);
   };
 
@@ -365,42 +407,6 @@ const SOSScreen = () => {
       );
       return { contacts: false, location: false };
     }
-  };
-
-  useEffect(() => {
-    checkPermissions();
-  }, []);
-
-  const checkPermissions = async () => {
-    // Skip permission check for web platform
-    if (Platform.OS === 'web') {
-      return true;
-    }
-
-    if (Platform.OS === 'android') {
-      try {
-        const hasPermission = await PermissionsAndroid.check(
-          PermissionsAndroid.PERMISSIONS.SEND_SMS
-        );
-        if (!hasPermission) {
-          const granted = await PermissionsAndroid.request(
-            PermissionsAndroid.PERMISSIONS.SEND_SMS,
-            {
-              title: 'SMS Permission',
-              message: 'This app needs SMS permission to send emergency messages',
-              buttonPositive: 'OK',
-            }
-          );
-          return granted === PermissionsAndroid.RESULTS.GRANTED;
-        }
-        return true;
-      } catch (error) {
-        console.error('Permission check failed:', error);
-        return false;
-      }
-    }
-
-    return true;
   };
 
   // Update loading indicator
