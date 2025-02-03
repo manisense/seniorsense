@@ -2,7 +2,7 @@ import * as Contacts from 'expo-contacts';
 import * as SMS from 'expo-sms';
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
-import { Alert } from 'react-native';
+import { Alert, NativeModules } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { EmergencyContact } from '../../../types';
 import { SMSService } from '../../../services/sms/AndroidSmsModule';
@@ -113,32 +113,22 @@ export const triggerSOS = async (contacts: EmergencyContact[]): Promise<boolean>
       return false;
     }
 
-    // Request permissions first
+    // Handle permissions based on platform
     if (Platform.OS === 'android') {
-      const hasPermission = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.SEND_SMS);
+      const hasPermission = await checkSMSPermission();
       if (!hasPermission) {
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.SEND_SMS,
-          {
-            title: 'SMS Permission',
-            message: 'This app needs SMS permission to send emergency messages',
-            buttonPositive: 'OK',
-          }
+        Alert.alert(
+          'Permission Required',
+          'SMS permission is required for emergency messages',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Open Settings',
+              onPress: () => Linking.openSettings()
+            }
+          ]
         );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
-          Alert.alert(
-            'Permission Required',
-            'SMS permission is required for emergency messages',
-            [
-              { text: 'Cancel', style: 'cancel' },
-              {
-                text: 'Open Settings',
-                onPress: () => Linking.openSettings()
-              }
-            ]
-          );
-          return false;
-        }
+        return false;
       }
     }
 
@@ -154,7 +144,6 @@ export const triggerSOS = async (contacts: EmergencyContact[]): Promise<boolean>
       ]);
     } catch (error) {
       console.error('[SOS] Location error:', error);
-      // Continue without location if it fails
     }
 
     // Send SMS to all contacts
@@ -200,11 +189,45 @@ export const triggerSOS = async (contacts: EmergencyContact[]): Promise<boolean>
   }
 };
 
-export const sendEmergencySMS = async (
-  contact: EmergencyContact,
-  location: Location.LocationObject | null
-) => {
+const checkSMSPermission = async () => {
+  if (Platform.OS === 'web') {
+    return true;
+  }
+
+  if (Platform.OS === 'android') {
+    try {
+      const { AndroidSmsModule } = NativeModules;
+      if (AndroidSmsModule?.requestSMSPermission) {
+        return await AndroidSmsModule.requestSMSPermission();
+      }
+    } catch (error) {
+      console.error('SMS permission check failed:', error);
+    }
+  }
+  return true;
+};
+
+export const sendEmergencySMS = async (contact: EmergencyContact, location: Location.LocationObject | null) => {
   try {
+    if (Platform.OS === 'android') {
+      const hasPermission = await checkSMSPermission();
+      if (!hasPermission) {
+        Alert.alert(
+          'Permission Required',
+          'SMS permission is required for emergency messages',
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { 
+              text: 'Settings',
+              onPress: () => Linking.openSettings()
+            }
+          ]
+        );
+        return false;
+      }
+    }
+
+    // Rest of the SMS sending logic
     console.log(`[SOS] Preparing to send SMS to ${contact.name} (${contact.phone})`);
     
     const message = `EMERGENCY: I need immediate help!\n${
