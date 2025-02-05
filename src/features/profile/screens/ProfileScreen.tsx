@@ -1,16 +1,27 @@
 import React, { useState, useEffect } from 'react';
 import { ScrollView, Alert, StyleSheet, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Card, TextInput, Button, Text } from 'react-native-paper';
+import { Card, TextInput, Button, Text, IconButton } from 'react-native-paper';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { ProfileTypes } from '../types';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+type RootStackParamList = {
+  Main: undefined;
+  Settings: undefined;
+  ProfileScreen: undefined;
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
 const PROFILE_STORAGE_KEY = 'user_profile';
 
 export const ProfileScreen = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const navigation = useNavigation<NavigationProp>();
   const [profile, setProfile] = useState<ProfileTypes['userProfile']>({
     name: '',
     age: 0,
@@ -46,118 +57,48 @@ export const ProfileScreen = () => {
     }
   };
 
-  const addCondition = () => {
-    setProfile(prev => ({
-      ...prev,
-      medicalConditions: [...(prev.medicalConditions || []), '']
-    }));
-  };
-
-  const addMedication = () => {
-    setProfile(prev => ({
-      ...prev,
-      medications: [...(prev.medications || []), '']
-    }));
-  };
-
-  const updateCondition = (index: number, value: string) => {
-    setProfile(prev => ({
-      ...prev,
-      medicalConditions: prev.medicalConditions?.map((item, i) => 
-        i === index ? value : item
-      ) || []
-    }));
-  };
-
-  const updateMedication = (index: number, value: string) => {
-    setProfile(prev => ({
-      ...prev,
-      medications: prev.medications?.map((item, i) => 
-        i === index ? value : item
-      ) || []
-    }));
-  };
-
   return (
-    <ScrollView style={styles.container}>
-      <View style={styles.content}>
-        <Card style={styles.card}>
-          <Card.Title title={t('profile.personalInfo')} />
-          <Card.Content>
-            <TextInput
-              mode="outlined"
-              label={t('profile.enterName')}
-              value={profile.name}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, name: text }))}
-              style={styles.input}
-            />
-            <TextInput
-              mode="outlined"
-              label={t('profile.enterAge')}
-              value={profile.age.toString()}
-              onChangeText={(text) => setProfile(prev => ({ ...prev, age: parseInt(text) || 0 }))}
-              keyboardType="numeric"
-              style={styles.input}
-            />
-          </Card.Content>
-        </Card>
-
-        <Card style={styles.card}>
-          <Card.Title title={t('profile.medicalInfo')} />
-          <Card.Content>
-            <Text variant="titleMedium" style={styles.sectionTitle}>
-              {t('profile.conditions')}
-            </Text>
-            {profile.medicalConditions?.map((condition, index) => (
-              <TextInput
-                key={`condition-${index}`}
-                mode="outlined"
-                value={condition}
-                placeholder={t('profile.enterCondition')}
-                onChangeText={(text) => updateCondition(index, text)}
-                style={styles.input}
-              />
-            ))}
-            <Button
-              mode="outlined"
-              onPress={addCondition}
-              style={styles.button}
-            >
-              {t('profile.addCondition')}
-            </Button>
-
-            <Text variant="titleMedium" style={[styles.sectionTitle, styles.topSpacing]}>
-              {t('profile.medications')}
-            </Text>
-            {profile.medications?.map((medication, index) => (
-              <TextInput
-                key={`medication-${index}`}
-                mode="outlined"
-                value={medication}
-                placeholder={t('profile.enterMedication')}
-                onChangeText={(text) => updateMedication(index, text)}
-                style={styles.input}
-              />
-            ))}
-            <Button
-              mode="outlined"
-              onPress={addMedication}
-              style={styles.button}
-            >
-              {t('profile.addMedication')}
-            </Button>
-          </Card.Content>
-        </Card>
-
-        <Button
-          mode="contained"
-          onPress={saveProfile}
-          disabled={loading}
-          style={styles.saveButton}
-        >
-          {t('profile.save')}
-        </Button>
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.header}>
+        <IconButton
+          icon="arrow-left"
+          size={24}
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        />
+        <Text style={[styles.title, { color: theme.colors.primary }]}>Profile</Text>
+        <IconButton
+          icon="cog"
+          size={24}
+          onPress={() => navigation.navigate('Settings')}
+          style={styles.settingsButton}
+        />
       </View>
+      <Card style={styles.card}>
+        <Card.Content>
+          <TextInput
+            label="Name"
+            value={profile.name}
+            onChangeText={(text) => setProfile(prev => ({ ...prev, name: text }))}
+            style={styles.input}
+          />
+          <TextInput
+            label="Age"
+            value={String(profile.age)}
+            onChangeText={(text) => setProfile(prev => ({ ...prev, age: parseInt(text) || 0 }))}
+            keyboardType="numeric"
+            style={styles.input}
+          />
+          <Button
+            mode="contained"
+            onPress={saveProfile}
+            loading={loading}
+            style={styles.button}
+          >
+            Save Profile
+          </Button>
+        </Card.Content>
+      </Card>
     </ScrollView>
   );
 };
@@ -165,27 +106,33 @@ export const ProfileScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
-  },
-  content: {
     padding: 16,
+  },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    flex: 1,
+    textAlign: 'center',
+  },
+  backButton: {
+    margin: 0,
+  },
+  settingsButton: {
+    margin: 0,
   },
   card: {
     marginBottom: 16,
   },
   input: {
-    marginBottom: 8,
+    marginBottom: 12,
   },
   button: {
-    marginTop: 8,
-  },
-  sectionTitle: {
-    marginBottom: 8,
-  },
-  topSpacing: {
-    marginTop: 16,
-  },
-  saveButton: {
     marginTop: 16,
   },
 });

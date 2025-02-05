@@ -1,28 +1,70 @@
-
-import RemindersScreen from '@/features/reminders/screens/RemindersScreen';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { View, Text, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
+import FeedScreen from '../screens/FeedScreen';
 import HealthScreen from '../features/health/screens/HealthScreen';
-import { useTheme } from '../context/ThemeContext';
-import { ProfileStack } from './ProfileStack';
+import RemindersScreen from '@/features/reminders/screens/RemindersScreen';
 import SOSScreen from '@/features/emergency/screens/SOSScreen';
+import { useTheme } from '../context/ThemeContext';
 
-const Tab = createBottomTabNavigator();
+type RootStackParamList = {
+  MainTabs: undefined;
+  Profile: undefined;
+};
+
+type TabParamList = {
+  Home: undefined;
+  Feed: undefined;
+  Health: undefined;
+  Reminders: undefined;
+  SOS: undefined;
+};
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+const Tab = createBottomTabNavigator<TabParamList>();
+
+const Header = () => {
+  const navigation = useNavigation<NavigationProp>();
+  const { isDark } = useTheme();
+  
+  return (
+    <SafeAreaView style={{ backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }}>
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        padding: 16,
+        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
+      }}>
+        <Text style={{
+          fontSize: 20,
+          fontWeight: 'bold',
+          color: isDark ? '#F9FAFB' : '#111827',
+        }}>
+          SeniorSense
+        </Text>
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+          <MaterialCommunityIcons 
+            name="account-circle" 
+            size={24} 
+            color={isDark ? '#F9FAFB' : '#111827'}
+          />
+        </TouchableOpacity>
+      </View>
+    </SafeAreaView>
+  );
+};
 
 const TabNavigator = () => {
-  const { theme, isDark } = useTheme();
-
   return (
     <Tab.Navigator
       screenOptions={{
-        tabBarActiveTintColor: isDark ? '#60A5FA' : '#2563EB', // blue-400 : blue-600
-        tabBarInactiveTintColor: isDark ? '#E5E7EB' : '#4B5563', // gray-200 : gray-600
-        tabBarStyle: {
-          backgroundColor: isDark ? '#1F2937' : '#FFFFFF', // gray-800 : white
-          borderTopWidth: 1,
-          borderTopColor: isDark ? '#374151' : '#E5E7EB', // gray-700 : gray-200
-        },
+        header: () => <Header />
       }}
     >
       <Tab.Screen 
@@ -31,6 +73,24 @@ const TabNavigator = () => {
         options={{
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen 
+        name="Feed" 
+        component={FeedScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="rss" size={size} color={color} />
+          ),
+        }}
+      />
+      <Tab.Screen 
+        name="Health" 
+        component={HealthScreen}
+        options={{
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons name="heart" size={size} color={color} />
           ),
         }}
       />
@@ -50,30 +110,11 @@ const TabNavigator = () => {
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="alert-circle" size={size} color={color} />
           ),
-          tabBarLabel: 'SOS',
-        }}
-      />
-      <Tab.Screen 
-        name="Health" 
-        component={HealthScreen}
-        options={{
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="heart" size={size} color={color} />
-          ),
-        }}
-      />
-      <Tab.Screen 
-        name="Profile" 
-        component={ProfileStack}
-        options={{
-          headerShown: false,
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="account" size={size} color={color} />
-          ),
         }}
       />
     </Tab.Navigator>
   );
 };
 
+export { Header };
 export default TabNavigator;

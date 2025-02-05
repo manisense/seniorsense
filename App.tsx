@@ -5,6 +5,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import TabNavigator from './src/navigation/TabNavigator';
 import { Provider as PaperProvider} from 'react-native-paper';
 import { ThemeProvider } from './src/context/ThemeContext';
+import { StackNavigator } from '@/navigation/StackNavigator';
 
 export default function App() {
   return (
@@ -13,7 +14,7 @@ export default function App() {
         <SafeAreaProvider>
           <NavigationContainer>
             <AuthProvider>
-              <TabNavigator />
+              <StackNavigator />
             </AuthProvider>
           </NavigationContainer>
         </SafeAreaProvider>
