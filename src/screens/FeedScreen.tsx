@@ -3,18 +3,18 @@ import { View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useTheme } from '../context/ThemeContext';
 
 const FeedScreen = () => {
-  const { isDark } = useTheme();
+  const { theme } = useTheme();
 
   return (
     <ScrollView 
-      style={[styles.container, { backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }]}
+      style={[styles.container, { backgroundColor: theme.colors.background }]}
       contentContainerStyle={styles.contentContainer}
     >
-      <Text style={[styles.title, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+      <Text style={[styles.title, { color: theme.colors.text }]}>
         Community Feed
       </Text>
       <View style={styles.placeholder}>
-        <Text style={[styles.placeholderText, { color: isDark ? '#E5E7EB' : '#4B5563' }]}>
+        <Text style={[styles.placeholderText, { color: theme.colors.text }]}>
           Feed content will be displayed here
         </Text>
       </View>

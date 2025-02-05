@@ -23,7 +23,7 @@ const SettingsScreen = () => {
         />
         <List.Item
           title={t('settings.darkMode')}
-          left={props => <List.Icon {...props} icon="theme-light-dark" />}
+          left={props => <List.Icon {...props} icon="theme-light-dark" color={theme.colors.primary} />}
           right={() => (
             <Switch
               value={isDark}
@@ -35,7 +35,7 @@ const SettingsScreen = () => {
         />
         <List.Item
           title={t('settings.notifications')}
-          left={props => <List.Icon {...props} icon="bell" />}
+          left={props => <List.Icon {...props} icon="bell" color={theme.colors.primary} /> }
           right={() => (
             <Switch
               value={true}
@@ -47,7 +47,7 @@ const SettingsScreen = () => {
         />
         <List.Item
           title={t('settings.about')}
-          left={props => <List.Icon {...props} icon="information" />}
+          left={props => <List.Icon {...props} icon="information" color={theme.colors.primary} />}
           onPress={() => {}}
           titleStyle={{ color: theme.colors.text }}
         />
