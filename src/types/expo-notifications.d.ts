@@ -2,6 +2,7 @@ declare module 'expo-notifications' {
   interface NotificationTriggerInput {
     hour?: number;
     minute?: number;
+    seconds?: number;
     repeats?: boolean;
     channelId?: string;
   }

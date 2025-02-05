@@ -1,13 +1,15 @@
 export type RootStackParamList = {
   MainTabs: undefined;
-  ProfileDetails: undefined;
-  SignIn: undefined;
-  SignUp: undefined;
+  Profile: undefined;
+  Settings: undefined;
+  FeedDetail: { item: any };
 };
 
 export type TabParamList = {
   Home: undefined;
   Reminders: undefined;
   Health: undefined;
-  Profile: undefined;
+  SOS: undefined;
+  Feed: undefined;
+  Settings: undefined;
 };

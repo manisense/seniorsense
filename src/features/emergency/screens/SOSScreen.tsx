@@ -11,6 +11,8 @@ import { useTranslation } from '../../../hooks/useTranslation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Card, Text, Button, Portal, Dialog, Surface } from 'react-native-paper';
 import { MD3LightTheme, PaperProvider } from 'react-native-paper';
+import { List } from 'react-native-paper';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const STORAGE_KEY = 'emergency_contacts';
 const MAX_CONTACTS = 5;
@@ -430,55 +432,99 @@ const SOSScreen = () => {
         },
       }}
     >
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
-        <ScrollView>
-          <Surface style={[styles.contactsSection, { backgroundColor: theme.colors.surface }]}>
-            <View style={styles.sectionHeader}>
-              <Text variant="titleLarge" style={{ color: theme.colors.text }}>{t('sos.contacts')}</Text>
-              <Text variant="bodyLarge" style={{ color: theme.colors.text }}>
-                {contacts.length}/{MAX_CONTACTS}
-              </Text>
-            </View>
-
-            {contacts.map((contact) => (
-              <Card key={contact.id} style={[styles.contactCard, { backgroundColor: theme.colors.surface }]}>
-                <Card.Content>
-                  <Text variant="titleMedium" style={{ color: theme.colors.text }}>{contact.name}</Text>
-                  <Text variant="bodyMedium" style={[styles.contactPhone, { color: theme.colors.text }]}>
-                    {contact.phone}
-                  </Text>
-                  <Button
-                    mode="outlined"
-                    onPress={() => handleRemoveContact(contact.id)}
-                    style={[styles.removeButton, { borderColor: theme.colors.error }]}
-                    textColor={theme.colors.error}
-                  >
-                    {t('sos.deleteContact')}
-                  </Button>
-                </Card.Content>
-              </Card>
-            ))}
-
-            <Button
-              mode="outlined"
-              onPress={handleAddContact}
-              disabled={contacts.length >= MAX_CONTACTS || loading}
-              style={[styles.addButton, { borderColor: theme.colors.primary }]}
-              textColor={theme.colors.primary}
-            >
-              {t('sos.addContact')}
-            </Button>
-
-            <Button
-              mode="contained"
-              onPress={handleSOS}
-              disabled={contacts.length === 0 || loading}
-              style={[styles.sosButton, { backgroundColor: theme.colors.error }]}
-              textColor={theme.colors.surface}
-            >
+      <Surface style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <ScrollView contentContainerStyle={styles.content}>
+          <TouchableOpacity
+            style={[styles.emergencyButton, { backgroundColor: theme.colors.error }]}
+            onPress={handleSOS}
+          >
+            <MaterialCommunityIcons 
+              name="phone" 
+              size={48} 
+              color={theme.colors.surface} 
+            />
+            <Text style={[styles.emergencyText, { color: theme.colors.surface }]}>
               {t('sos.triggerEmergency')}
-            </Button>
-          </Surface>
+            </Text>
+          </TouchableOpacity>
+
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Title
+              title={t('sos.contacts')}
+              titleStyle={{ color: theme.colors.text }}
+              left={props => (
+                <MaterialCommunityIcons
+                  {...props}
+                  name="contacts"
+                  color={theme.colors.primary}
+                />
+              )}
+            />
+            <Card.Content>
+              <Text style={{ color: theme.colors.text }}>
+                {t('sos.contactsDescription')}
+              </Text>
+              <List.Section>
+                {contacts.map((contact, index) => (
+                  <List.Item
+                    key={index}
+                    title={contact.name}
+                    description={contact.relationship}
+                    titleStyle={{ color: theme.colors.text }}
+                    descriptionStyle={{ color: theme.colors.textSecondary }}
+                    left={props => (
+                      <MaterialCommunityIcons
+                        {...props}
+                        name="account"
+                        size={24}
+                        color={theme.colors.primary}
+                      />
+                    )}
+                    right={props => (
+                      <MaterialCommunityIcons
+                        {...props}
+                        name="phone"
+                        size={24}
+                        color={theme.colors.primary}
+                        onPress={() => handleRemoveContact(contact.id)}
+                      />
+                    )}
+                  />
+                ))}
+              </List.Section>
+            </Card.Content>
+          </Card>
+
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+            <Card.Title
+              title={t('sos.medicalInfo')}
+              titleStyle={{ color: theme.colors.text }}
+              left={props => (
+                <MaterialCommunityIcons
+                  {...props}
+                  name="medical-bag"
+                  color={theme.colors.primary}
+                />
+              )}
+            />
+            <Card.Content>
+              <Text style={{ color: theme.colors.textSecondary }}>
+                {t('sos.allergies')}:
+              </Text>
+              <Text style={{ color: theme.colors.text, marginBottom: 8 }}>
+                {/* Add medical info handling */}
+                {t('sos.noAllergies')}
+              </Text>
+
+              <Text style={{ color: theme.colors.textSecondary }}>
+                {t('sos.conditions')}:
+              </Text>
+              <Text style={{ color: theme.colors.text, marginBottom: 8 }}>
+                {/* Add medical info handling */}
+                {t('sos.noConditions')}
+              </Text>
+            </Card.Content>
+          </Card>
         </ScrollView>
     
         <Portal>
@@ -488,23 +534,23 @@ const SOSScreen = () => {
           >
             <Dialog.Title>{t('sos.confirmEmergency')}</Dialog.Title>
             <Dialog.Content>
-              <Text variant="bodyMedium">{t('sos.confirmMessage')}</Text>
+              <Text>{t('sos.confirmMessage')}</Text>
             </Dialog.Content>
             <Dialog.Actions>
-              <Button mode="text" onPress={() => setConfirmDialog(false)}>
+              <Button onPress={() => setConfirmDialog(false)}>
                 {t('sos.cancel')}
               </Button>
               <Button 
                 mode="contained"
                 onPress={confirmSOS}
-                style={{ backgroundColor: '#FF3B30' }}
+                buttonColor={theme.colors.error}
               >
                 {t('sos.confirm')}
               </Button>
             </Dialog.Actions>
           </Dialog>
         </Portal>
-      </View>
+      </Surface>
     </PaperProvider>
   );
 };
@@ -518,34 +564,37 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  contactsSection: {
-    margin: 16,
+  content: {
     padding: 16,
-    borderRadius: 8,
+  },
+  emergencyButton: {
+    padding: 24,
+    borderRadius: 16,
+    alignItems: 'center',
+    marginBottom: 24,
+    elevation: 4,
+  },
+  emergencyText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 8,
+  },
+  card: {
+    marginBottom: 16,
     elevation: 2,
   },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+  label: {
+    fontSize: 14,
+    marginTop: 8,
+  },
+  info: {
+    fontSize: 16,
     marginBottom: 16,
   },
-  contactCard: {
-    marginBottom: 12,
-  },
-  contactPhone: {
-    marginTop: 4,
-  },
-  addButton: {
-    marginTop: 16,
-  },
-  sosButton: {
-    marginTop: 24,
-    paddingVertical: 8,
-    backgroundColor: '#FF3B30',
-  },
-  removeButton: {
-    marginTop: 8,
+  iconContainer: {
+    padding: 8,
+    borderRadius: 12,
+    marginBottom: 8,
   },
 });
 
