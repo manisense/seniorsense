@@ -17,7 +17,7 @@ const HealthScreen = () => {
             titleStyle={{ color: theme.colors.text }}
           />
           <Card.Content>
-            <Text variant="bodyLarge" style={{ color: theme.colors.text }}>
+            <Text style={[styles.text, { color: theme.colors.textSecondary }]}>
               {t('health.comingSoon')}
             </Text>
           </Card.Content>
@@ -38,6 +38,9 @@ const styles = StyleSheet.create({
   card: {
     marginBottom: 16,
     elevation: 4,
+  },
+  text: {
+    // Add any necessary styles for the Text component
   },
 });
 

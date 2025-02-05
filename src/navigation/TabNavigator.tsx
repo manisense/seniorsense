@@ -1,7 +1,9 @@
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { View, Text, TouchableOpacity } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { View, StyleSheet } from 'react-native';
+import { Text, TouchableRipple } from 'react-native-paper';
+import { useNavigation, CompositeNavigationProp } from '@react-navigation/native';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import HomeScreen from '../screens/HomeScreen';
@@ -10,71 +12,93 @@ import HealthScreen from '../features/health/screens/HealthScreen';
 import RemindersScreen from '@/features/reminders/screens/RemindersScreen';
 import SOSScreen from '@/features/emergency/screens/SOSScreen';
 import { useTheme } from '../context/ThemeContext';
+import { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS, DEFAULT_PROFILE, ProfileType } from '../features/profile/constants';
+import { TabParamList } from './types';
 
 type RootStackParamList = {
-  MainTabs: undefined;
+  Main: undefined;
   Profile: undefined;
 };
 
-type TabParamList = {
-  Home: undefined;
-  Feed: undefined;
-  Health: undefined;
-  Reminders: undefined;
-  SOS: undefined;
-};
-
-type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+type NavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<TabParamList>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 const Tab = createBottomTabNavigator<TabParamList>();
 
-const Header = () => {
+export const Header = () => {
   const navigation = useNavigation<NavigationProp>();
-  const { isDark } = useTheme();
-  
+  const { theme } = useTheme();
+  const [profile, setProfile] = useState<ProfileType>(DEFAULT_PROFILE);
+
+  useEffect(() => {
+    loadProfile();
+  }, []);
+
+  const loadProfile = async () => {
+    try {
+      const savedProfile = await AsyncStorage.getItem(STORAGE_KEYS.PROFILE);
+      if (savedProfile) {
+        const parsedProfile = JSON.parse(savedProfile);
+        setProfile(parsedProfile);
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    }
+  };
+
   return (
-    <SafeAreaView style={{ backgroundColor: isDark ? '#1F2937' : '#FFFFFF' }}>
-      <View style={{
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: 16,
-        backgroundColor: isDark ? '#1F2937' : '#FFFFFF',
-      }}>
-        <Text style={{
-          fontSize: 20,
-          fontWeight: 'bold',
-          color: isDark ? '#F9FAFB' : '#111827',
-        }}>
-          SeniorSense
-        </Text>
-        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+    <SafeAreaView style={[
+      styles.header, 
+      { backgroundColor: theme?.colors?.surface || '#FFFFFF' }
+    ]}>
+      <View style={styles.headerContent}>
+        <TouchableRipple onPress={() => navigation.navigate('Profile')}>
+          <View style={styles.profileSection}>
+            <MaterialCommunityIcons 
+              name="account-circle" 
+              size={32} 
+              color={theme?.colors?.primary || '#2563EB'} 
+            />
+            <Text style={[
+              styles.userName, 
+              { color: theme?.colors?.text || '#000000' }
+            ]}>
+              {profile?.name || 'User'}
+            </Text>
+          </View>
+        </TouchableRipple>
+        <TouchableRipple onPress={() => navigation.navigate('Settings')}>
           <MaterialCommunityIcons 
-            name="account-circle" 
+            name="cog" 
             size={24} 
-            color={isDark ? '#F9FAFB' : '#111827'}
+            color={theme?.colors?.primary || '#2563EB'} 
           />
-        </TouchableOpacity>
+        </TouchableRipple>
       </View>
     </SafeAreaView>
   );
 };
 
 const TabNavigator = () => {
-  const { theme, isDark } = useTheme();
+  const { theme } = useTheme();
 
   return (
     <Tab.Navigator
       screenOptions={{
         header: () => <Header />,
         tabBarStyle: {
-          backgroundColor: theme.colors.surface,
-          borderTopColor: theme.colors.border,
+          backgroundColor: theme?.colors?.surface || '#FFFFFF',
+          borderTopColor: theme?.colors?.outline || '#E5E5E5',
         },
-        tabBarActiveTintColor: theme.colors.primary,
-        tabBarInactiveTintColor: theme.colors.secondary,
+        tabBarActiveTintColor: theme?.colors?.primary || '#2563EB',
+        tabBarInactiveTintColor: theme?.colors?.textSecondary || '#64748B',
         tabBarLabelStyle: {
           fontSize: 12,
+          fontWeight: '500',
         },
       }}
     >
@@ -110,7 +134,7 @@ const TabNavigator = () => {
         component={RemindersScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="bell" size={size} color={color} />
+            <MaterialCommunityIcons name="alarm" size={size} color={color} />
           ),
         }}
       />
@@ -119,13 +143,39 @@ const TabNavigator = () => {
         component={SOSScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="alert" size={size} color={color} />
+            <MaterialCommunityIcons name="alert-circle" size={size} color={color} />
           ),
+          tabBarLabel: 'SOS',
         }}
       />
     </Tab.Navigator>
   );
 };
 
-export { Header };
+const styles = StyleSheet.create({
+  header: {
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+  },
+  headerContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  profileSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  userName: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+});
+
 export default TabNavigator;
