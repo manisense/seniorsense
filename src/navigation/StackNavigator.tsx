@@ -1,9 +1,14 @@
 import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import TabNavigator from './TabNavigator';
-import SOSScreen  from '../features/emergency/screens/SOSScreen';
+import ProfileScreen from '@/features/profile/screens/ProfileScreen';
 
-const Stack = createNativeStackNavigator();
+export type RootStackParamList = {
+  MainTabs: undefined;
+  Profile: undefined;
+};
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export const StackNavigator = () => {
   return (
@@ -14,13 +19,11 @@ export const StackNavigator = () => {
         options={{ headerShown: false }}
       />
       <Stack.Screen 
-        name="SOS" 
-        component={SOSScreen}
+        name="Profile" 
+        component={ProfileScreen}
         options={{
-          headerStyle: {
-            backgroundColor: '#FF3B30',
-          },
-          headerTintColor: '#fff',
+          headerShown: true,
+          animation: 'slide_from_right'
         }}
       />
     </Stack.Navigator>
