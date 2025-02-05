@@ -15,7 +15,7 @@
       "**/*"
     ],
     "ios": {
-      "bundleIdentifier": "com.your.package",
+      "bundleIdentifier": "com.seniorsense.app",
       "supportsTablet": true,
       "infoPlist": {
         "NSContactsUsageDescription": "This app needs access to contacts to select emergency contacts.",
@@ -31,7 +31,7 @@
       }
     },
     "android": {
-      "package": "com.your.package",
+      "package": "com.seniorsense.app",
       "adaptiveIcon": {
         "foregroundImage": "./src/assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"

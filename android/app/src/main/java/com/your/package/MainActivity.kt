@@ -1,4 +1,4 @@
-package com.your.package
+package com.seniorsense.app
 
 import android.os.Build
 import android.os.Bundle
