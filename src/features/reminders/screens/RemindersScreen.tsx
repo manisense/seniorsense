@@ -70,7 +70,6 @@ const RemindersScreen = () => {
       setReminders(updatedReminders);
       await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
 
-      // Schedule notifications with correct trigger type
       for (const time of times) {
         const trigger: Notifications.NotificationTriggerInput = {
           hour: time.getHours(),
@@ -94,7 +93,6 @@ const RemindersScreen = () => {
         });
       }
 
-      // Reset form fields
       setMedicineName('');
       setDosage(null);
       setDoseType(null);
@@ -109,29 +107,6 @@ const RemindersScreen = () => {
     newTimes[index] = currentDate;
     setTimes(newTimes);
     setShowTimePicker(false);
-  };
-
-  const renderTimePickers = () => {
-    return times.map((time, index) => (
-      <Card key={index} >
-        <Button 
-          onPress={() => { 
-            setShowTimePicker(true); 
-            setTimePickerIndex(index); 
-          }}
-        >
-          {t('reminders.time')} {index + 1}
-        </Button>
-        {showTimePicker && timePickerIndex === index && (
-          <DateTimePicker
-            value={time}
-            mode="time"
-            display="default"
-            onChange={(event, selectedDate) => handleTimeChange(index, event, selectedDate)}
-          />
-        )}
-      </Card>
-    ));
   };
 
   const handleDosageChange = (value: number) => {
@@ -158,9 +133,12 @@ const RemindersScreen = () => {
   };
 
   return (
-    <ScrollView style={styles.container}>
-      <Card style={styles.card}>
-        <Card.Title title={t('reminders.addNew')} />
+    <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        <Card.Title 
+          title={t('reminders.addNew')} 
+          titleStyle={{ color: theme.colors.text }}
+        />
         <Card.Content>
           <TextInput
             mode="outlined"
@@ -168,6 +146,8 @@ const RemindersScreen = () => {
             value={medicineName}
             onChangeText={setMedicineName}
             style={styles.input}
+            theme={theme}
+            textColor={theme.colors.text}
           />
 
           <Menu
@@ -178,6 +158,7 @@ const RemindersScreen = () => {
                 mode="outlined"
                 onPress={() => handleMenuOpen('dosage')}
                 style={styles.menuButton}
+                textColor={theme.colors.text}
               >
                 {dosage ? `${dosage} ${t('reminders.doses')}` : t('reminders.selectDosage')}
               </Button>
@@ -191,11 +172,10 @@ const RemindersScreen = () => {
                   setShowDosageMenu(false);
                 }}
                 title={`${num} ${t('reminders.doses')}`}
+                titleStyle={{ color: theme.colors.text }}
               />
             ))}
           </Menu>
-
-          {/* Similar Menu components for doseType and illnessType */}
           
           {times.map((time, index) => (
             <View key={index} style={styles.timeContainer}>
@@ -206,6 +186,7 @@ const RemindersScreen = () => {
                   setTimePickerIndex(index);
                 }}
                 style={styles.timeButton}
+                textColor={theme.colors.text}
               >
                 {t('reminders.time')} {index + 1}: {time.toLocaleTimeString()}
               </Button>
@@ -215,6 +196,7 @@ const RemindersScreen = () => {
                   mode="time"
                   display="default"
                   onChange={(event, selectedDate) => handleTimeChange(index, event, selectedDate)}
+                  themeVariant={theme.dark ? 'dark' : 'light'}
                 />
               )}
             </View>
@@ -224,6 +206,7 @@ const RemindersScreen = () => {
             mode="contained"
             onPress={addReminder}
             style={styles.addButton}
+            textColor={theme.colors.surface}
           >
             {t('reminders.save')}
           </Button>
@@ -231,14 +214,16 @@ const RemindersScreen = () => {
       </Card>
 
       {reminders.map((reminder) => (
-        <Card key={reminder.id} style={styles.reminderCard}>
+        <Card key={reminder.id} style={[styles.reminderCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Title
             title={reminder.medicineName}
+            titleStyle={{ color: theme.colors.text }}
             right={(props) => (
               <IconButton
                 {...props}
                 icon="delete"
                 onPress={() => handleDeleteReminder(reminder.id)}
+                iconColor={theme.colors.error}
               />
             )}
           />
@@ -246,11 +231,15 @@ const RemindersScreen = () => {
             <List.Item
               title={`${t('reminders.dosage')}: ${reminder.dosage}`}
               description={`${t('reminders.doseType')}: ${t(`reminders.${reminder.doseType}`)}`}
+              titleStyle={{ color: theme.colors.text }}
+              descriptionStyle={{ color: theme.colors.text }}
             />
             <List.Item
               title={`${t('reminders.illnessType')}: ${t(`reminders.${reminder.illnessType}`)}`}
               description={`${t('reminders.times')}: ${reminder.times.map(time => 
                 new Date(time).toLocaleTimeString()).join(', ')}`}
+              titleStyle={{ color: theme.colors.text }}
+              descriptionStyle={{ color: theme.colors.text }}
             />
           </Card.Content>
         </Card>
@@ -262,7 +251,6 @@ const RemindersScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
     padding: 16,
   },
   card: {

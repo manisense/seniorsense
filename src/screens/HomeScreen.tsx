@@ -1,21 +1,22 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { Card, Text, Button, useTheme } from 'react-native-paper';
+import { Card, Text, Button } from 'react-native-paper';
+import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 const HomeScreen = ({ navigation }: { navigation: any }) => {
   const { t } = useTranslation();
-  const theme = useTheme();
+  const { theme } = useTheme();
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <Text variant="headlineMedium" style={styles.welcome}>
+      <Text variant="headlineMedium" style={[styles.welcome, { color: theme.colors.text }]}>
         {t('home.welcome')}
       </Text>
       
-      <Card style={styles.card}>
-        <Card.Content>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        <Card.Content style={{ backgroundColor: theme.colors.surface }}>
           <Button
             mode="contained"
             onPress={() => navigation.navigate('Reminders')}
@@ -44,8 +45,8 @@ const HomeScreen = ({ navigation }: { navigation: any }) => {
         </Card.Content>
       </Card>
 
-      <Card style={styles.card}>
-        <Card.Title title={t('home.healthSummary')} />
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+        <Card.Title titleStyle={{ color: theme.colors.text }} title={t('home.healthSummary')} />
         <Card.Content>
           <Text variant="bodyMedium">Coming soon...</Text>
         </Card.Content>

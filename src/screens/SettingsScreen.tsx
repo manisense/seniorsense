@@ -12,11 +12,11 @@ const SettingsScreen = () => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <List.Section>
+      <List.Section style={{ backgroundColor: theme.colors.surface }}>
         <List.Item
           title={t('settings.language')}
           description={language === 'en' ? 'English' : 'हिंदी'}
-          left={props => <List.Icon {...props} icon="translate" />}
+          left={props => <List.Icon {...props} icon="translate" color={theme.colors.primary} />}
           onPress={() => setLanguage(language === 'en' ? 'hi' : 'en')}
           titleStyle={{ color: theme.colors.text }}
           descriptionStyle={{ color: theme.colors.text }}

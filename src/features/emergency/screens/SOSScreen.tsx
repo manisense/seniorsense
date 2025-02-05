@@ -432,25 +432,26 @@ const SOSScreen = () => {
     >
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         <ScrollView>
-          <Surface style={styles.contactsSection}>
+          <Surface style={[styles.contactsSection, { backgroundColor: theme.colors.surface }]}>
             <View style={styles.sectionHeader}>
-              <Text variant="titleLarge">{t('sos.contacts')}</Text>
-              <Text variant="bodyLarge">
+              <Text variant="titleLarge" style={{ color: theme.colors.text }}>{t('sos.contacts')}</Text>
+              <Text variant="bodyLarge" style={{ color: theme.colors.text }}>
                 {contacts.length}/{MAX_CONTACTS}
               </Text>
             </View>
 
             {contacts.map((contact) => (
-              <Card key={contact.id} style={styles.contactCard}>
+              <Card key={contact.id} style={[styles.contactCard, { backgroundColor: theme.colors.surface }]}>
                 <Card.Content>
-                  <Text variant="titleMedium">{contact.name}</Text>
-                  <Text variant="bodyMedium" style={styles.contactPhone}>
+                  <Text variant="titleMedium" style={{ color: theme.colors.text }}>{contact.name}</Text>
+                  <Text variant="bodyMedium" style={[styles.contactPhone, { color: theme.colors.text }]}>
                     {contact.phone}
                   </Text>
                   <Button
                     mode="outlined"
                     onPress={() => handleRemoveContact(contact.id)}
-                    style={styles.removeButton}
+                    style={[styles.removeButton, { borderColor: theme.colors.error }]}
+                    textColor={theme.colors.error}
                   >
                     {t('sos.deleteContact')}
                   </Button>
@@ -462,7 +463,8 @@ const SOSScreen = () => {
               mode="outlined"
               onPress={handleAddContact}
               disabled={contacts.length >= MAX_CONTACTS || loading}
-              style={styles.addButton}
+              style={[styles.addButton, { borderColor: theme.colors.primary }]}
+              textColor={theme.colors.primary}
             >
               {t('sos.addContact')}
             </Button>
@@ -471,7 +473,8 @@ const SOSScreen = () => {
               mode="contained"
               onPress={handleSOS}
               disabled={contacts.length === 0 || loading}
-              style={styles.sosButton}
+              style={[styles.sosButton, { backgroundColor: theme.colors.error }]}
+              textColor={theme.colors.surface}
             >
               {t('sos.triggerEmergency')}
             </Button>
@@ -514,7 +517,6 @@ const styles = StyleSheet.create({
   },
   container: {
     flex: 1,
-    backgroundColor: '#f5f5f5',
   },
   contactsSection: {
     margin: 16,

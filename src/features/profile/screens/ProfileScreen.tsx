@@ -59,28 +59,18 @@ export const ProfileScreen = () => {
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
-      <View style={styles.header}>
-        <IconButton
-          icon="arrow-left"
-          size={24}
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        />
-        <Text style={[styles.title, { color: theme.colors.primary }]}>Profile</Text>
-        <IconButton
-          icon="cog"
-          size={24}
-          onPress={() => navigation.navigate('Settings')}
-          style={styles.settingsButton}
-        />
+      <View style={[styles.header, { backgroundColor: theme.colors.surface }]}>
+        <Text variant="headlineLarge" style={{ color: theme.colors.text }}>{t('profile.title') || 'Profile'}</Text>
       </View>
-      <Card style={styles.card}>
+      <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
           <TextInput
             label="Name"
             value={profile.name}
             onChangeText={(text) => setProfile(prev => ({ ...prev, name: text }))}
             style={styles.input}
+            theme={theme}
+            mode="outlined"
           />
           <TextInput
             label="Age"
@@ -88,14 +78,26 @@ export const ProfileScreen = () => {
             onChangeText={(text) => setProfile(prev => ({ ...prev, age: parseInt(text) || 0 }))}
             keyboardType="numeric"
             style={styles.input}
+            theme={theme}
+            mode="outlined"
           />
           <Button
             mode="contained"
             onPress={saveProfile}
             loading={loading}
-            style={styles.button}
+            style={[styles.button, { backgroundColor: theme.colors.primary }]}
+            textColor={theme.colors.surface}
           >
-            Save Profile
+            {t('profile.save')}
+          </Button>
+          <Button
+            mode="outlined"
+            onPress={() => navigation.navigate('Settings')}
+            style={[styles.settingsButton, { borderColor: theme.colors.primary }]}
+            textColor={theme.colors.primary}
+            icon="cog"
+          >
+            {t('profile.settings')}
           </Button>
         </Card.Content>
       </Card>
@@ -120,11 +122,8 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: 'center',
   },
-  backButton: {
-    margin: 0,
-  },
   settingsButton: {
-    margin: 0,
+    marginTop: 12,
   },
   card: {
     marginBottom: 16,

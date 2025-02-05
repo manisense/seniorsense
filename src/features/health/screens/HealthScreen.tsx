@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet } from 'react-native';
-import { Card, Text } from 'react-native-paper';
+import { Card, Text, Surface } from 'react-native-paper';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 
@@ -9,27 +9,35 @@ const HealthScreen = () => {
   const { t } = useTranslation();
 
   return (
-    <ScrollView style={styles.container}>
-      <Card style={styles.card}>
-        <Card.Title title="Health Monitoring" />
-        <Card.Content>
-          <Text variant="bodyLarge">
-            Health monitoring features coming soon...
-          </Text>
-        </Card.Content>
-      </Card>
-    </ScrollView>
+    <Surface style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
+          <Card.Title
+            title={t('health.monitoring')}
+            titleStyle={{ color: theme.colors.text }}
+          />
+          <Card.Content>
+            <Text variant="bodyLarge" style={{ color: theme.colors.text }}>
+              {t('health.comingSoon')}
+            </Text>
+          </Card.Content>
+        </Card>
+      </ScrollView>
+    </Surface>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 16,
-    backgroundColor: '#f5f5f5',
+    flexGrow: 1,
   },
   card: {
     marginBottom: 16,
+    elevation: 4,
   },
 });
 
