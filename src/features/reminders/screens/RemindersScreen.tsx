@@ -45,7 +45,7 @@ const RemindersScreen = () => {
     });
   };
 
-  const [dosage, setDosage] = useState<number | null>(null);
+  const [dosage, setDosage] = useState<number>(0);
   const [doseType, setDoseType] = useState<string | null>(null);
   const [illnessType, setIllnessType] = useState<string | null>(null);
   const [times, setTimes] = useState([new Date()]);
@@ -56,7 +56,7 @@ const RemindersScreen = () => {
   const [timePickerIndex, setTimePickerIndex] = useState<number | null>(null);
 
   const addReminder = async () => {
-    if (medicineName && dosage && doseType && illnessType && times.length) {
+    if (medicineName && dosage > 0 && doseType && illnessType && times.length) {
       const newReminder: Reminder = {
         id: Date.now().toString(),
         medicineName,
@@ -94,7 +94,7 @@ const RemindersScreen = () => {
       }
 
       setMedicineName('');
-      setDosage(null);
+      setDosage(0);
       setDoseType(null);
       setIllnessType(null);
       setTimes([new Date()]);
@@ -152,13 +152,15 @@ const RemindersScreen = () => {
 
           <Menu
             visible={showDosageMenu}
-            onDismiss={() => setShowDosageMenu(false)}
+            onDismiss={() => handleMenuOpen(null)}
+            contentStyle={{ backgroundColor: theme.colors.surface }}
             anchor={
               <Button
                 mode="outlined"
                 onPress={() => handleMenuOpen('dosage')}
                 style={styles.menuButton}
                 textColor={theme.colors.text}
+                labelStyle={{ color: theme.colors.text }}
               >
                 {dosage ? `${dosage} ${t('reminders.doses')}` : t('reminders.selectDosage')}
               </Button>
@@ -169,10 +171,11 @@ const RemindersScreen = () => {
                 key={num}
                 onPress={() => {
                   handleDosageChange(num);
-                  setShowDosageMenu(false);
+                  handleMenuOpen(null);
                 }}
                 title={`${num} ${t('reminders.doses')}`}
                 titleStyle={{ color: theme.colors.text }}
+                style={{ backgroundColor: theme.colors.surface }}
               />
             ))}
           </Menu>

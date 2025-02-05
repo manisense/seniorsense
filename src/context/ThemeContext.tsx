@@ -31,8 +31,8 @@ const darkTheme = {
   colors: {
     ...MD3DarkTheme.colors,
     ...customColors,
-    background: '#121212',
-    surface: '#121212',
+    background: '#1F2937',
+    surface: '#1F2937',
     text: '#FFFFFF',
     border: customColors.gray9,
     shadow: customColors.gray8,
