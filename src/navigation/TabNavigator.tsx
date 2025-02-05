@@ -61,10 +61,21 @@ const Header = () => {
 };
 
 const TabNavigator = () => {
+  const { theme, isDark } = useTheme();
+
   return (
     <Tab.Navigator
       screenOptions={{
-        header: () => <Header />
+        header: () => <Header />,
+        tabBarStyle: {
+          backgroundColor: theme.colors.surface,
+          borderTopColor: theme.colors.border,
+        },
+        tabBarActiveTintColor: theme.colors.primary,
+        tabBarInactiveTintColor: theme.colors.secondary,
+        tabBarLabelStyle: {
+          fontSize: 12,
+        },
       }}
     >
       <Tab.Screen 
@@ -99,7 +110,7 @@ const TabNavigator = () => {
         component={RemindersScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="alarm" size={size} color={color} />
+            <MaterialCommunityIcons name="bell" size={size} color={color} />
           ),
         }}
       />
@@ -108,7 +119,7 @@ const TabNavigator = () => {
         component={SOSScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="alert-circle" size={size} color={color} />
+            <MaterialCommunityIcons name="alert" size={size} color={color} />
           ),
         }}
       />
