@@ -86,9 +86,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.your.package'
+    namespace 'com.seniorsense.app'
     defaultConfig {
-        applicationId 'com.your.package'
+        applicationId 'com.seniorsense.app'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
