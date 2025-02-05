@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Platform, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Platform, Alert, Modal, TouchableOpacity } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Notifications from 'expo-notifications';
-import { Card, TextInput, Button, List, Menu, Text, IconButton } from 'react-native-paper';
+import { Card, TextInput, Button, List, Text, IconButton } from 'react-native-paper';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { Reminder } from '../types/reminder.types';
@@ -13,6 +13,7 @@ const RemindersScreen = () => {
   const { t } = useTranslation();
   const [reminders, setReminders] = useState<Reminder[]>([]);
   const [medicineName, setMedicineName] = useState('');
+  const [showDosageModal, setShowDosageModal] = useState(false);
 
   useEffect(() => {
     loadReminders();
@@ -50,9 +51,6 @@ const RemindersScreen = () => {
   const [illnessType, setIllnessType] = useState<string | null>(null);
   const [times, setTimes] = useState([new Date()]);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showDoseTypeMenu, setShowDoseTypeMenu] = useState(false);
-  const [showDosageMenu, setShowDosageMenu] = useState(false);
-  const [showIllnessTypeMenu, setShowIllnessTypeMenu] = useState(false);
   const [timePickerIndex, setTimePickerIndex] = useState<number | null>(null);
 
   const addReminder = async () => {
@@ -112,6 +110,7 @@ const RemindersScreen = () => {
   const handleDosageChange = (value: number) => {
     setDosage(value);
     setTimes(Array(value).fill(new Date()));
+    setShowDosageModal(false);
   };
 
   const handleDeleteReminder = async (id: string) => {
@@ -126,11 +125,39 @@ const RemindersScreen = () => {
     }
   };
 
-  const handleMenuOpen = (menuType: 'dosage' | 'doseType' | 'illnessType' | null) => {
-    setShowDosageMenu(menuType === 'dosage');
-    setShowDoseTypeMenu(menuType === 'doseType');
-    setShowIllnessTypeMenu(menuType === 'illnessType');
-  };
+  const renderDosageModal = () => (
+    <Modal
+      visible={showDosageModal}
+      transparent={true}
+      onRequestClose={() => setShowDosageModal(false)}
+      animationType="fade"
+    >
+      <TouchableOpacity
+        style={styles.modalOverlay}
+        activeOpacity={1}
+        onPress={() => setShowDosageModal(false)}
+      >
+        <View style={[styles.modalContent, { backgroundColor: theme.colors.surface }]}>
+          <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+            {t('reminders.selectDosage')}
+          </Text>
+          <View style={styles.buttonGroup}>
+            {[1, 2, 3, 4, 5].map((num) => (
+              <Button
+                key={num}
+                mode="outlined"
+                onPress={() => handleDosageChange(num)}
+                style={styles.modalButton}
+                textColor={theme.colors.text}
+              >
+                {`${num} ${t('reminders.doses')}`}
+              </Button>
+            ))}
+          </View>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
 
   return (
     <ScrollView style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -150,35 +177,17 @@ const RemindersScreen = () => {
             textColor={theme.colors.text}
           />
 
-          <Menu
-            visible={showDosageMenu}
-            onDismiss={() => handleMenuOpen(null)}
-            contentStyle={{ backgroundColor: theme.colors.surface }}
-            anchor={
-              <Button
-                mode="outlined"
-                onPress={() => handleMenuOpen('dosage')}
-                style={styles.menuButton}
-                textColor={theme.colors.text}
-                labelStyle={{ color: theme.colors.text }}
-              >
-                {dosage ? `${dosage} ${t('reminders.doses')}` : t('reminders.selectDosage')}
-              </Button>
-            }
+          <Button
+            mode="outlined"
+            onPress={() => setShowDosageModal(true)}
+            style={styles.menuButton}
+            textColor={theme.colors.text}
+            labelStyle={{ color: theme.colors.text }}
           >
-            {[1, 2, 3, 4, 5].map((num) => (
-              <Menu.Item
-                key={num}
-                onPress={() => {
-                  handleDosageChange(num);
-                  handleMenuOpen(null);
-                }}
-                title={`${num} ${t('reminders.doses')}`}
-                titleStyle={{ color: theme.colors.text }}
-                style={{ backgroundColor: theme.colors.surface }}
-              />
-            ))}
-          </Menu>
+            {dosage > 0 ? `${dosage} ${t('reminders.doses')}` : t('reminders.selectDosage')}
+          </Button>
+
+          {renderDosageModal()}
           
           {times.map((time, index) => (
             <View key={index} style={styles.timeContainer}>
@@ -276,6 +285,29 @@ const styles = StyleSheet.create({
   },
   reminderCard: {
     marginBottom: 16,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+  },
+  modalContent: {
+    width: '80%',
+    padding: 20,
+    borderRadius: 8,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 16,
+    textAlign: 'center',
+  },
+  buttonGroup: {
+    gap: 8,
+  },
+  modalButton: {
+    marginBottom: 8,
   },
 });
 
