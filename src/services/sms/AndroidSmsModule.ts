@@ -1,6 +1,5 @@
 import { NativeModules, Platform, PermissionsAndroid, Alert } from 'react-native';
 import * as SMS from 'expo-sms';
-import * as Permissions from 'expo-permissions';
 
 interface AndroidSmsModule {
   sendDirectSMS: (phoneNumber: string, message: string) => Promise<boolean>;

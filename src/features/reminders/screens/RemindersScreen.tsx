@@ -79,10 +79,7 @@ const ReminderCard = ({ reminder, onPress }: { reminder: Reminder; onPress: () =
               key={index} 
               style={[styles.timeText, { color: theme.colors.primary }]}
             >
-              {new Date(time).toLocaleTimeString([], { 
-                hour: '2-digit', 
-                minute: '2-digit' 
-              })}
+              {time}
             </Text>
           ))}
         </View>
@@ -206,6 +203,10 @@ const RemindersScreen: React.FC = (): ReactElement => {
         ...(frequencyType === 'weekly' && { selectedDays }),
       };
 
+      const formattedTimes = times.map(time => 
+        `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`
+      );
+
       const newReminder: Reminder = {
         id: Date.now().toString(),
         medicineName,
@@ -215,7 +216,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
         frequency,
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        times: times.map(time => time.toISOString()),
+        times: formattedTimes,
         isActive: true,
         notificationSettings: {
           sound: notificationSound,
@@ -262,7 +263,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
         await Notifications.scheduleNotificationAsync({
           content,
-          trigger,
+          trigger: { seconds: 1 },
         });
       }
     } catch (error) {
@@ -413,7 +414,8 @@ const RemindersScreen: React.FC = (): ReactElement => {
   };
 
   const handleReminderPress = (reminder: Reminder) => {
-    console.log('Reminder pressed:', reminder);
+    setSelectedReminder(reminder);
+    setShowStatusModal(true);
   };
 
   const renderDosageModal = () => (

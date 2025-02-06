@@ -14,7 +14,7 @@ export const ReminderCard: React.FC<ReminderCardProps> = ({ reminder, onPress })
   const { theme } = useTheme();
 
   return (
-    <TouchableCard onPress={onPress} >
+    <TouchableCard onPress={onPress}>
       <View style={styles.reminderHeader}>
         <Text style={[styles.medicineName, { color: theme.colors.text }]}>
           {reminder.medicineName}

@@ -41,11 +41,14 @@ export class FallDetector {
   private async setupNotifications() {
     if (Platform.OS !== 'web') {
       await Notifications.requestPermissionsAsync();
-      await Notifications.setNotificationChannelAsync('fall-detection', {
-        name: 'Fall Detection',
-        importance: Notifications.AndroidImportance.HIGH,
-        vibrationPattern: [0, 250, 250, 250],
-      });
+      if (Platform.OS === 'android') {
+        await Notifications.setNotificationChannelAsync('default', {
+          name: 'Fall Detection',
+          importance: 4, // HIGH = 4
+          vibrationPattern: [0, 250, 250, 250],
+          lightColor: '#FF231F7C',
+        });
+      }
     }
   }
 
@@ -55,10 +58,9 @@ export class FallDetector {
         content: {
           title: 'Fall Detected! 📱',
           body: 'Significant movement detected. Are you okay?',
-          data: { type: 'fall_detection' },
-          sound: true,
+          sound: 'default'
         },
-        trigger: null,
+        trigger: { seconds: 1 } // Schedule for 1 second from now
       });
     }
   }
