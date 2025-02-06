@@ -99,10 +99,12 @@ export default {
       },
       doseTypes: {
         pill: 'Pill',
-        ml: 'ml',
-        mg: 'mg',
-        g: 'g',
-        other: 'Other'
+        tablet: 'Tablet',
+        capsule: 'Capsule',
+        injection: 'Injection',
+        drops: 'Drops',
+        syrup: 'Syrup',
+        inhaler: 'Inhaler'
       },
       notificationTitle: 'Reminder for {medicineName}',
       notificationBody: 'Time to take {dosage} {doseType}',
@@ -116,6 +118,25 @@ export default {
       snoozeTime: 'Snooze Time',
       minutes: 'minutes',
       noUpcoming: 'No upcoming reminders',
+      dose: 'Dose',
+      medicationTimes: 'Medication Times',
+      duration: 'Duration',
+      illnessTypes: {
+        diabetes: 'Diabetes',
+        hypertension: 'Hypertension',
+        heart: 'Heart Disease',
+        arthritis: 'Arthritis',
+        asthma: 'Asthma',
+        other: 'Other'
+      },
+      notificationPermissionRequired: 'Notification permission is required',
+      selectFrequency: 'Select Frequency',
+      days: 'Days',
+      common: {
+        done: 'Done',
+        cancel: 'Cancel',
+        save: 'Save'
+      }
     },
     feed: {
       healthTips: 'Health Tips',
@@ -525,10 +546,12 @@ export default {
       },
       doseTypes: {
         pill: 'गोली',
-        ml: 'मिली',
-        mg: 'मिग्रा',
-        g: 'ग्राम',
-        other: 'अन्य'
+        tablet: 'टैबलेट',
+        capsule: 'कैप्सूल',
+        injection: 'इंजेक्शन',
+        drops: 'ड्रॉप्स',
+        syrup: 'सिरप',
+        inhaler: 'इनहेलर'
       },
       notificationTitle: '{medicineName} का रिमाइंडर',
       notificationBody: '{dosage} {doseType} लेने का समय',
@@ -538,7 +561,26 @@ export default {
       comingSoon: 'जल्द आ रहा है',
       snooze: 'स्नूज़',
       snoozeTime: 'स्नूज़ समय',
-      minutes: 'मिनट'
+      minutes: 'मिनट',
+      dose: 'खुराक',
+      medicationTimes: 'दवा समय',
+      duration: 'अवधि',
+      illnessTypes: {
+        diabetes: 'मधुमेह',
+        hypertension: 'उच्च रक्तचाप',
+        heart: 'हृदय रोग',
+        arthritis: 'गठिया',
+        asthma: 'दमा',
+        other: 'अन्य'
+      },
+      notificationPermissionRequired: 'सूचना अनुमति आवश्यक है',
+      selectFrequency: 'आवृत्ति चुनें',
+      days: 'दिन',
+      common: {
+        done: 'पूर्ण',
+        cancel: 'रद्द करें',
+        save: 'सहेजें'
+      }
     },
     feed: {
       healthTips: 'स्वास्थ्य टिप्स',

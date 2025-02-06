@@ -153,6 +153,14 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
   const [showAddForm, setShowAddForm] = useState(false);
 
+  // Add these state variables at the top with other states
+  const [showDoseTypeModal, setShowDoseTypeModal] = useState(false);
+  const [showIllnessTypeModal, setShowIllnessTypeModal] = useState(false);
+
+  // Add these constants near the top of the component
+  const DOSE_TYPES: DoseType[] = ['pill', 'tablet', 'capsule', 'injection', 'drops', 'syrup', 'inhaler'];
+  const ILLNESS_TYPES = ['diabetes', 'hypertension', 'heart', 'arthritis', 'asthma', 'other'];
+
   useEffect(() => {
     const initializeApp = async () => {
       await loadReminders();
@@ -676,41 +684,46 @@ const RemindersScreen: React.FC = (): ReactElement => {
                 theme={theme}
                 textColor={theme.colors.text}
               />
-              <View style={styles.row}>
-                <TextInput
-                  label={t('reminders.dosage')}
-                  value={dosage.toString()}
-                  onChangeText={(text) => setDosage(parseInt(text) || 0)}
-                  keyboardType="numeric"
-                  style={[styles.input, styles.flex1]}
-                  mode="outlined"
-                />
-                <TextInput
-                  label={t('reminders.doseType')}
-                  value={doseType}
-                  onChangeText={setDoseType as (text: string) => void}
-                  style={[styles.input, styles.flex1]}
-                  mode="outlined"
-                />
-              </View>
-              <TextInput
-                label={t('reminders.illnessType')}
-                value={illnessType}
-                onChangeText={setIllnessType}
-                style={styles.input}
-                mode="outlined"
-              />
+
+              {/* Dose Type Selector */}
+              <TouchableOpacity
+                onPress={() => setShowDoseTypeModal(true)}
+                style={[styles.selector, { borderColor: theme.colors.outline }]}
+              >
+                <Text style={[styles.label, { color: theme.colors.text }]}>
+                  {t('reminders.doseType')}
+                </Text>
+                <Text style={[styles.value, { color: theme.colors.primary }]}>
+                  {t(`reminders.doseTypes.${doseType}`)}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Illness Type Selector */}
+              <TouchableOpacity
+                onPress={() => setShowIllnessTypeModal(true)}
+                style={[styles.selector, { borderColor: theme.colors.outline }]}
+              >
+                <Text style={[styles.label, { color: theme.colors.text }]}>
+                  {t('reminders.illnessType')}
+                </Text>
+                <Text style={[styles.value, { color: theme.colors.primary }]}>
+                  {illnessType ? t(`reminders.illnessTypes.${illnessType}`) : t('reminders.selectIllnessType')}
+                </Text>
+              </TouchableOpacity>
+
+              {/* Existing dosage selector */}
               <TouchableOpacity
                 onPress={() => setShowDosageModal(true)}
-                style={styles.dosageSelector}
+                style={[styles.selector, { borderColor: theme.colors.outline }]}
               >
                 <Text style={[styles.label, { color: theme.colors.text }]}>
                   {t('reminders.selectDosage')}
                 </Text>
-                <Text style={[styles.dosageValue, { color: theme.colors.primary }]}>
-                  {dosage} {doseType}(s)
+                <Text style={[styles.value, { color: theme.colors.primary }]}>
+                  {dosage} {t(`reminders.doseTypes.${doseType}`)}(s)
                 </Text>
               </TouchableOpacity>
+
               {dosage > 0 && (
                 <View style={styles.timeInputsContainer}>
                   <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
@@ -884,6 +897,91 @@ const RemindersScreen: React.FC = (): ReactElement => {
       )}
       {renderStatusModal()}
       {renderSnoozeModal()}
+
+      {/* Add these new modals */}
+      <Modal
+        visible={showDoseTypeModal}
+        transparent={true}
+        onRequestClose={() => setShowDoseTypeModal(false)}
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowDoseTypeModal(false)}
+        >
+          <View style={[styles.modalContent, { 
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.outline 
+          }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              {t('reminders.selectDoseType')}
+            </Text>
+            <View style={styles.optionsList}>
+              {DOSE_TYPES.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.optionItem, { 
+                    backgroundColor: doseType === type ? theme.colors.primaryContainer : 'transparent'
+                  }]}
+                  onPress={() => {
+                    setDoseType(type);
+                    setShowDoseTypeModal(false);
+                  }}
+                >
+                  <Text style={[styles.optionText, { 
+                    color: doseType === type ? theme.colors.primary : theme.colors.text 
+                  }]}>
+                    {t(`reminders.doseTypes.${type}`)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      <Modal
+        visible={showIllnessTypeModal}
+        transparent={true}
+        onRequestClose={() => setShowIllnessTypeModal(false)}
+        animationType="fade"
+      >
+        <TouchableOpacity
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowIllnessTypeModal(false)}
+        >
+          <View style={[styles.modalContent, { 
+            backgroundColor: theme.colors.surface,
+            borderColor: theme.colors.outline 
+          }]}>
+            <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
+              {t('reminders.selectIllnessType')}
+            </Text>
+            <View style={styles.optionsList}>
+              {ILLNESS_TYPES.map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[styles.optionItem, { 
+                    backgroundColor: illnessType === type ? theme.colors.primaryContainer : 'transparent'
+                  }]}
+                  onPress={() => {
+                    setIllnessType(type);
+                    setShowIllnessTypeModal(false);
+                  }}
+                >
+                  <Text style={[styles.optionText, { 
+                    color: illnessType === type ? theme.colors.primary : theme.colors.text 
+                  }]}>
+                    {t(`reminders.illnessTypes.${type}`)}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </Surface>
   );
 };
@@ -994,8 +1092,8 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   label: {
+    fontSize: 14,
     marginBottom: 4,
-    fontSize: 16,
   },
   notificationSettings: {
     marginVertical: 16,
@@ -1076,15 +1174,26 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 12,
   },
-  dosageSelector: {
+  selector: {
     marginVertical: 8,
     padding: 16,
     borderRadius: 8,
     borderWidth: 1,
   },
-  dosageValue: {
+  value: {
     fontSize: 16,
     fontWeight: '600',
+  },
+  optionsList: {
+    marginTop: 8,
+  },
+  optionItem: {
+    padding: 16,
+    borderRadius: 8,
+    marginVertical: 4,
+  },
+  optionText: {
+    fontSize: 16,
   },
   dosageButton: {
     margin: 4,
