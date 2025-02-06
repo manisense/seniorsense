@@ -60,7 +60,7 @@ export const Header = () => {
           <View style={styles.profileSection}>
             <MaterialCommunityIcons 
               name="account-circle" 
-              size={32} 
+              size={36} 
               color={theme?.colors?.primary || '#2563EB'} 
             />
             <Text style={[
@@ -74,7 +74,7 @@ export const Header = () => {
         <TouchableRipple onPress={() => navigation.navigate('Settings')}>
           <MaterialCommunityIcons 
             name="cog" 
-            size={24} 
+            size={32} 
             color={theme?.colors?.primary || '#2563EB'} 
           />
         </TouchableRipple>
@@ -93,12 +93,13 @@ const TabNavigator = () => {
         tabBarStyle: {
           backgroundColor: theme?.colors?.surface || '#FFFFFF',
           borderTopColor: theme?.colors?.outline || '#E5E5E5',
+          height: 60,
         },
         tabBarActiveTintColor: theme?.colors?.primary || '#2563EB',
         tabBarInactiveTintColor: theme?.colors?.textSecondary || '#64748B',
         tabBarLabelStyle: {
-          fontSize: 12,
-          fontWeight: '500',
+          fontSize: 16,
+          fontWeight: '600',
         },
       }}
     >
@@ -130,7 +131,7 @@ const TabNavigator = () => {
         }}
       />
       <Tab.Screen 
-        name="Reminders" 
+        name="Reminder" 
         component={RemindersScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
@@ -165,7 +166,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 12,
   },
   profileSection: {
     flexDirection: 'row',
@@ -173,8 +174,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '500',
+    fontSize: 20,
+    fontWeight: '600',
   },
 });
 
