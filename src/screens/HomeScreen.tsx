@@ -92,43 +92,65 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
 
   const loadUpcomingReminders = async () => {
     try {
-      const savedReminders = await AsyncStorage.getItem('reminders');
-      console.log('Loading reminders with key "reminders":', savedReminders);
+      let savedReminders = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
+      console.log('Loading reminders:', savedReminders);
       
       if (savedReminders) {
         const allReminders: Reminder[] = JSON.parse(savedReminders);
         
-        // Filter out any past reminders and get upcoming ones
         const now = new Date();
-        const currentTime = now.getTime();
+        const currentHours = now.getHours();
+        const currentMinutes = now.getMinutes();
+        const currentTimeInMinutes = currentHours * 60 + currentMinutes;
 
-        const upcoming = allReminders
-          .filter(reminder => {
-            if (!reminder.times || reminder.times.length === 0) return false;
+        // Transform reminders to include next upcoming time
+        const remindersWithNextTime = allReminders
+          .filter(reminder => reminder.isActive)
+          .map(reminder => {
+            if (!reminder.times || reminder.times.length === 0) {
+              console.log('Filtering out reminder:', reminder.medicineName, 'due to no times');
+              return null;
+            }
+
+            // Convert all times to minutes and find the next upcoming one
+            const timeInMinutes = reminder.times.map(time => {
+              const [hours, minutes] = time.split(':');
+              return parseInt(hours) * 60 + parseInt(minutes);
+            });
+
+            // Find the next upcoming time
+            const nextTime = timeInMinutes.find(time => time > currentTimeInMinutes);
             
-            // Check the latest dose status
-            const latestDose = reminder.doses?.[reminder.doses.length - 1];
-            if (latestDose && ['taken', 'missed'].includes(latestDose.status)) return false;
+            if (nextTime) {
+              console.log('Reminder:', reminder.medicineName, 'next time:', 
+                `${Math.floor(nextTime/60)}:${String(nextTime%60).padStart(2, '0')}`, 
+                'isUpcoming: true');
+              
+              return {
+                ...reminder,
+                nextTimeInMinutes: nextTime,
+                nextTimeString: reminder.times[timeInMinutes.indexOf(nextTime)]
+              };
+            }
             
-            // Convert time string to today's date for comparison
-            const [hours, minutes] = reminder.times[0].split(':');
-            const reminderTime = new Date();
-            reminderTime.setHours(parseInt(hours, 10));
-            reminderTime.setMinutes(parseInt(minutes, 10));
-            
-            return reminderTime.getTime() > currentTime;
+            console.log('Reminder:', reminder.medicineName, 'has no upcoming times today');
+            return null;
           })
-          .sort((a, b) => {
-            // Sort by time
-            const [hoursA, minutesA] = a.times[0].split(':');
-            const [hoursB, minutesB] = b.times[0].split(':');
-            const timeA = new Date().setHours(parseInt(hoursA, 10), parseInt(minutesA, 10));
-            const timeB = new Date().setHours(parseInt(hoursB, 10), parseInt(minutesB, 10));
-            return timeA - timeB;
-          })
+          .filter((reminder): reminder is (Reminder & { 
+            nextTimeInMinutes: number, 
+            nextTimeString: string 
+          }) => reminder !== null)
+          .sort((a, b) => a.nextTimeInMinutes - b.nextTimeInMinutes)
           .slice(0, 3);
+
+        console.log('Filtered upcoming reminders:', remindersWithNextTime);
         
-        console.log('Filtered upcoming reminders:', upcoming);
+        // Transform back to regular reminder format but use the next upcoming time
+        const upcoming = remindersWithNextTime.map(reminder => ({
+          ...reminder,
+          times: [reminder.nextTimeString] // Use the next upcoming time for display
+        }));
+
         setUpcomingReminders(upcoming);
       } else {
         console.log('No reminders found in storage');
