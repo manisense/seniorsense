@@ -589,13 +589,23 @@ const SOSScreen = () => {
                       />
                     )}
                     right={props => (
+                      <>
                       <MaterialCommunityIcons
                         {...props}
                         name="phone"
                         size={24}
                         color={theme.colors.primary}
-                        onPress={() => handleRemoveContact(contact.id)}
+                        onPress={() => makeEmergencyCall(contact)}
                       />
+                      <MaterialCommunityIcons
+                        {...props}
+                        name="message-text"
+                        size={24}
+                        color={theme.colors.primary}
+                        onPress={() => sendEmergencySMS(contact, null)}
+                      />
+                      </>
+                      
                     )}
                   />
                 ))}
@@ -640,18 +650,7 @@ const SOSScreen = () => {
                       </View>
                     </View>
                     <View style={styles.contactActions}>
-                      <IconButton
-                        icon="phone"
-                        mode="contained-tonal"
-                        size={20}
-                        onPress={() => makeEmergencyCall(contact)}
-                      />
-                      <IconButton
-                        icon="message-text"
-                        mode="contained-tonal"
-                        size={20}
-                        onPress={() => sendEmergencySMS(contact, null)}
-                      />
+                      
                       <IconButton
                         icon="delete"
                         mode="contained-tonal"
