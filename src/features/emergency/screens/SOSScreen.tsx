@@ -15,9 +15,19 @@ import { List } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { FallDetector } from '../utils/fallDetection';
 import { STORAGE_KEYS, FALL_DETECTION_SETTINGS } from '../constants';
+import * as Notifications from 'expo-notifications';
+import { Accelerometer } from 'expo-sensors';
 
 const STORAGE_KEY = 'emergency_contacts';
 const MAX_CONTACTS = 5;
+
+Notifications.setNotificationHandler({
+  handleNotification: async () => ({
+    shouldShowAlert: true,
+    shouldPlaySound: true,
+    shouldSetBadge: false,
+  }),
+});
 
 const checkPermissions = async () => {
   if (Platform.OS === 'web') {
@@ -56,6 +66,7 @@ const SOSScreen = () => {
   const [fallDetectionEnabled, setFallDetectionEnabled] = useState(false);
   const [fallDetector, setFallDetector] = useState<FallDetector | null>(null);
   const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
+  const [fallNotificationId, setFallNotificationId] = useState<string | null>(null);
 
   useEffect(() => {
     setupScreen();
@@ -442,6 +453,14 @@ const SOSScreen = () => {
   };
 
   const handleFallDetected = async () => {
+    console.log('Fall detection triggered - Showing emergency alert');
+    
+    // Get current accelerometer data
+    const subscription = await Accelerometer.addListener(({ x, y, z }) => {
+      console.log('Last accelerometer reading:', { x, y, z });
+      subscription.remove();
+    });
+
     Alert.alert(
       t('emergency.fallDetected'),
       t('emergency.fallDetectedMessage'),
@@ -449,10 +468,20 @@ const SOSScreen = () => {
         {
           text: t('emergency.imOk'),
           style: 'cancel',
+          onPress: async () => {
+            console.log('User confirmed they are OK');
+            if (fallNotificationId) {
+              await Notifications.cancelScheduledNotificationAsync(fallNotificationId);
+              setFallNotificationId(null);
+            }
+          },
         },
         {
           text: t('emergency.getHelp'),
-          onPress: () => handleEmergency(),
+          onPress: () => {
+            console.log('User requested emergency help');
+            handleEmergency();
+          },
           style: 'destructive',
         },
       ],
@@ -461,12 +490,15 @@ const SOSScreen = () => {
   };
 
   const toggleFallDetection = async (value: boolean) => {
+    console.log(`${value ? 'Enabling' : 'Disabling'} fall detection`);
     setFallDetectionEnabled(value);
     await AsyncStorage.setItem(STORAGE_KEYS.FALL_DETECTION_ENABLED, value.toString());
     
     if (value) {
+      console.log('Initializing fall detector with sensitivity:', sensitivity);
       fallDetector?.start();
     } else {
+      console.log('Stopping fall detector');
       fallDetector?.stop();
     }
   };
@@ -571,7 +603,7 @@ const SOSScreen = () => {
             </Card.Content>
           </Card>
 
-          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <View style={styles.headerRow}>
                 <Text variant="titleMedium" style={{ color: theme.colors.text }}>
@@ -648,7 +680,7 @@ const SOSScreen = () => {
 
          
 
-          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Content>
               <View style={styles.settingRow}>
                 <View style={styles.settingInfo}>

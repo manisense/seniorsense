@@ -1,6 +1,7 @@
 import { Accelerometer } from 'expo-sensors';
 import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Notifications from 'expo-notifications';
 import { STORAGE_KEYS } from '../constants';
 
 const FALL_THRESHOLD = 20; // Acceleration threshold for fall detection (in m/s²)
@@ -37,6 +38,31 @@ export class FallDetector {
     return Math.sqrt(x * x + y * y + z * z);
   }
 
+  private async setupNotifications() {
+    if (Platform.OS !== 'web') {
+      await Notifications.requestPermissionsAsync();
+      await Notifications.setNotificationChannelAsync('fall-detection', {
+        name: 'Fall Detection',
+        importance: Notifications.AndroidImportance.HIGH,
+        vibrationPattern: [0, 250, 250, 250],
+      });
+    }
+  }
+
+  private async showFallNotification() {
+    if (Platform.OS !== 'web') {
+      await Notifications.scheduleNotificationAsync({
+        content: {
+          title: 'Fall Detected! 📱',
+          body: 'Significant movement detected. Are you okay?',
+          data: { type: 'fall_detection' },
+          sound: true,
+        },
+        trigger: null,
+      });
+    }
+  }
+
   private async handleAccelerometerData({ x, y, z }: { x: number; y: number; z: number }) {
     const currentMagnitude = this.calculateAccelerationMagnitude(x, y, z);
     const previousMagnitude = this.calculateAccelerationMagnitude(
@@ -47,8 +73,14 @@ export class FallDetector {
 
     const accelerationDelta = Math.abs(currentMagnitude - previousMagnitude);
 
+    // Only log if delta is significant (> 0.5)
+    if (accelerationDelta > 0.5) {
+      console.log(`Significant movement - Delta: ${accelerationDelta.toFixed(2)}, Magnitude: ${currentMagnitude.toFixed(2)}`);
+    }
+
     if (accelerationDelta > this.sensitivity && !this.impactStartTime) {
       this.impactStartTime = Date.now();
+      console.log(`Potential fall detected! Delta: ${accelerationDelta.toFixed(2)}, Threshold: ${this.sensitivity}`);
     } else if (this.impactStartTime) {
       const timeSinceImpact = Date.now() - this.impactStartTime;
       
@@ -56,10 +88,12 @@ export class FallDetector {
         const isStable = accelerationDelta < STABILITY_THRESHOLD;
         
         if (isStable) {
+          console.log('Fall confirmed - Device stabilized after impact');
           this.impactStartTime = null;
           const fallDetectionEnabled = await AsyncStorage.getItem(STORAGE_KEYS.FALL_DETECTION_ENABLED);
           
           if (fallDetectionEnabled === 'true') {
+            await this.showFallNotification();
             this.onFallDetected();
           }
         }
@@ -76,18 +110,23 @@ export class FallDetector {
     }
 
     if (!this.isMonitoring) {
+      console.log('Starting fall detection monitoring...');
       this.isMonitoring = true;
       
-      await Accelerometer.setUpdateInterval(100); // 10 readings per second
+      await this.setupNotifications();
+      await Accelerometer.setUpdateInterval(100);
       
       this.subscription = Accelerometer.addListener(data => {
         this.handleAccelerometerData(data);
       });
+
+      console.log(`Fall detection active with ${this.sensitivity} sensitivity threshold`);
     }
   }
 
   public stop() {
     if (this.subscription) {
+      console.log('Stopping fall detection monitoring...');
       this.subscription.remove();
       this.subscription = null;
     }
