@@ -1,7 +1,14 @@
 export type FrequencyType = 'daily' | 'everyXDays' | 'weekly' | 'custom';
 export type WeekDay = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday' | 'sunday';
 export type ReminderStatus = 'pending' | 'taken' | 'skipped' | 'missed';
-export type DoseType = 'pill' | 'tablet' | 'capsule' | 'injection' | 'drops' | 'syrup' | 'inhaler';
+export type DoseType = 
+  | 'pill' 
+  | 'tablet' 
+  | 'capsule' 
+  | 'injection' 
+  | 'eyeDrops' 
+  | 'syrup' 
+  | 'inhaler';
 export type NotificationSound = 'default' | 'none';
 export type SnoozeInterval = 10 | 30 | 60; // minutes
 

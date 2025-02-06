@@ -12,6 +12,7 @@ import { format } from 'date-fns';
 import { CustomTheme } from '../../../context/ThemeContext';
 import { TouchableCard } from '../../../components/TouchableCard';
 import { STORAGE_KEYS } from '../../settings/constants';
+import { generateId, getLatestDoseStatus, getStatusColor } from '../utils/helpers';
 
 interface DatePickerEvent {
   type: string;
@@ -50,71 +51,119 @@ const SNOOZE_OPTIONS: { label: string; value: SnoozeInterval }[] = [
   { label: '1 hour', value: 60 },
 ];
 
-const ReminderCard = ({ reminder, onPress }: { reminder: Reminder; onPress: () => void }) => {
+// Update the medicine type icons mapping with correct icon names
+const MEDICINE_TYPE_ICONS: Record<DoseType, keyof typeof MaterialCommunityIcons.glyphMap> = {
+  pill: 'pill',
+  tablet: 'pill',
+  capsule: 'pill',
+  injection: 'needle',
+  eyeDrops: 'eye-plus-outline',
+  syrup: 'bottle-tonic-plus-outline',
+  inhaler: 'air-filter'
+};
+
+const ReminderCard = ({ 
+  reminder, 
+  onPress, 
+  onEdit, 
+  onDelete 
+}: { 
+  reminder: Reminder; 
+  onPress: () => void;
+  onEdit: (reminder: Reminder) => void;
+  onDelete: (id: string) => void;
+}) => {
   const { theme } = useTheme();
   const { t } = useTranslation();
   const latestDose = getLatestDoseStatus(reminder.doses);
 
+  const handleDeleteConfirmation = () => {
+    Alert.alert(
+      t('reminders.confirmDelete'),
+      t('reminders.deleteConfirmMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        { 
+          text: t('common.delete'), 
+          onPress: () => onDelete(reminder.id),
+          style: 'destructive' 
+        }
+      ]
+    );
+  };
+
   return (
-    <TouchableCard
-      onPress={onPress}
-      style={styles.reminderCard }
-    >
-      <View style={styles.reminderHeader}>
-        <MaterialCommunityIcons 
-          name="pill" 
-          size={24} 
-          color={theme.colors.primary} 
-        />
-        <Text style={[styles.medicineName, { color: theme.colors.text }]}>
-          {reminder.medicineName}
-        </Text>
-      </View>
-      <View style={styles.reminderDetails}>
-        <Text style={[styles.dosageText, { color: theme.colors.textSecondary }]}>
-          {`${reminder.dosage} ${reminder.doseType}`}
-        </Text>
-        <View style={styles.timeContainer}>
-          {reminder.times.map((time, index) => (
-            <Text 
-              key={index} 
-              style={[styles.timeText, { color: theme.colors.primary }]}
-            >
-              {time}
-            </Text>
-          ))}
-        </View>
-        {latestDose && (
-          <View style={[
-            styles.statusBadge, 
-            { backgroundColor: getStatusColor(latestDose.status, theme) }
-          ]}>
-            <Text style={styles.statusText}>
-              {t(`reminders.status.${latestDose.status}`)}
-            </Text>
+    <TouchableOpacity onPress={onPress}>
+      <Card style={[styles.reminderCard, { backgroundColor: theme.colors.surface }]}>
+        <Card.Content>
+          <View style={styles.cardContainer}>
+            {/* Left circle with icon */}
+            <View style={[styles.iconCircle, { backgroundColor: theme.colors.primaryContainer }]}>
+              <MaterialCommunityIcons 
+                name={MEDICINE_TYPE_ICONS[reminder.doseType]} 
+                size={24} 
+                color={theme.colors.primary} 
+              />
+            </View>
+
+            {/* Middle content */}
+            <View style={styles.cardContent}>
+              <Text style={[styles.medicineName, { color: theme.colors.text }]}>
+                {reminder.medicineName}
+              </Text>
+              <Text style={[styles.dosageText, { color: theme.colors.textSecondary }]}>
+                {reminder.dosage} {t(`reminders.doseTypes.${reminder.doseType}`)}
+              </Text>
+            </View>
+
+            {/* Right content */}
+            <View style={styles.rightContent}>
+              {/* Edit and Delete Icons */}
+              <View style={styles.actionIcons}>
+                <IconButton
+                  icon="pencil-outline"
+                  size={20}
+                  onPress={() => onEdit(reminder)}
+                  style={styles.actionIcon}
+                />
+                <IconButton
+                  icon="delete-outline"
+                  size={20}
+                  onPress={handleDeleteConfirmation}
+                  style={styles.actionIcon}
+                />
+              </View>
+
+              {/* Time */}
+              <Text style={[styles.timeText, { color: theme.colors.primary }]}>
+                {reminder.times[0]}
+              </Text>
+
+              {/* Status Chip */}
+              {latestDose && (
+                <View style={[styles.statusChip, { 
+                  backgroundColor: latestDose.status === 'taken' ? 
+                    'rgba(76, 175, 80, 0.1)' : theme.colors.surfaceVariant 
+                }]}>
+                  <MaterialCommunityIcons
+                    name={latestDose.status === 'taken' ? 'check' : 'clock-outline'}
+                    size={16}
+                    color={latestDose.status === 'taken' ? '#4CAF50' : theme.colors.textSecondary}
+                    style={styles.statusIcon}
+                  />
+                  <Text style={[styles.statusText, { 
+                    color: latestDose.status === 'taken' ? '#4CAF50' : theme.colors.textSecondary 
+                  }]}>
+                    {t(`reminders.status.${latestDose.status}`)}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        )}
-      </View>
-    </TouchableCard>
+        </Card.Content>
+      </Card>
+    </TouchableOpacity>
   );
-};
-
-const getStatusColor = (status: ReminderStatus, theme: CustomTheme) => {
-  switch (status) {
-    case 'taken':
-      return theme.colors.success;
-    case 'skipped':
-      return theme.colors.warning;
-    case 'missed':
-      return theme.colors.error;
-    default:
-      return theme.colors.disabled;
-  }
-};
-
-const getLatestDoseStatus = (doses: ReminderDose[]) => {
-  if (doses.length === 0) return null;
-  return doses[doses.length - 1];
 };
 
 const RemindersScreen: React.FC = (): ReactElement => {
@@ -156,9 +205,19 @@ const RemindersScreen: React.FC = (): ReactElement => {
   // Add these state variables at the top with other states
   const [showDoseTypeModal, setShowDoseTypeModal] = useState(false);
   const [showIllnessTypeModal, setShowIllnessTypeModal] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
 
   // Add these constants near the top of the component
-  const DOSE_TYPES: DoseType[] = ['pill', 'tablet', 'capsule', 'injection', 'drops', 'syrup', 'inhaler'];
+  const DOSE_TYPES: DoseType[] = [
+    'pill',
+    'tablet', 
+    'capsule',
+    'injection',
+    'eyeDrops',
+    'syrup',
+    'inhaler'
+  ];
   const ILLNESS_TYPES = ['diabetes', 'hypertension', 'heart', 'arthritis', 'asthma', 'other'];
 
   useEffect(() => {
@@ -328,6 +387,9 @@ const RemindersScreen: React.FC = (): ReactElement => {
     setFrequencyType('daily');
     setFrequencyInterval(1);
     setSelectedDays([]);
+    setShowAddForm(false);
+    setIsEditing(false);
+    setEditingReminder(null);
   };
 
   const handleDateChange = (event: DatePickerEvent, selectedDate?: Date) => {
@@ -477,6 +539,118 @@ const RemindersScreen: React.FC = (): ReactElement => {
     });
     setTimes(newTimes);
     setShowDosageModal(false);
+  };
+
+  const handleEditReminder = (reminder: Reminder) => {
+    setEditingReminder(reminder);
+    setMedicineName(reminder.medicineName);
+    setDosage(reminder.times.length);
+    setDoseType(reminder.doseType);
+    setIllnessType(reminder.illnessType);
+    // Convert time strings to Date objects
+    setTimes(reminder.times.map(timeStr => {
+      const [hours, minutes] = timeStr.split(':');
+      const date = new Date();
+      date.setHours(parseInt(hours, 10));
+      date.setMinutes(parseInt(minutes, 10));
+      return date;
+    }));
+    setFrequencyType(reminder.frequency.type);
+    setFrequencyInterval(reminder.frequency.interval || 1);
+    setSelectedDays(reminder.frequency.selectedDays || []);
+    setStartDate(new Date(reminder.startDate));
+    setEndDate(new Date(reminder.endDate));
+    setNotificationSound(reminder.notificationSettings.sound);
+    setVibrationEnabled(reminder.notificationSettings.vibration);
+    setShowAddForm(true);
+    setIsEditing(true);
+  };
+
+  const handleDeleteReminder = async (reminderId: string) => {
+    try {
+      // Cancel all notifications for this reminder
+      const reminderToDelete = reminders.find(r => r.id === reminderId);
+      if (reminderToDelete?.notifications) {
+        for (const notification of reminderToDelete.notifications) {
+          await Notifications.cancelScheduledNotificationAsync(notification.id);
+        }
+      }
+
+      // Remove from storage and state
+      const updatedReminders = reminders.filter(r => r.id !== reminderId);
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
+      setReminders(updatedReminders);
+      Alert.alert(t('reminders.deleted'), t('reminders.reminderDeleted'));
+    } catch (error) {
+      console.error('Error deleting reminder:', error);
+      Alert.alert(t('reminders.error'), t('reminders.errorDeletingReminder'));
+    }
+  };
+
+  const handleSubmit = async () => {
+    if (!medicineName.trim()) {
+      Alert.alert(t('reminders.error'), t('reminders.medicineNameRequired'));
+      return;
+    }
+
+    try {
+      const reminderData: Reminder = {
+        id: isEditing && editingReminder ? editingReminder.id : generateId(),
+        medicineName,
+        dosage: dosage.toString(),
+        doseType,
+        illnessType,
+        frequency: {
+          type: frequencyType,
+          interval: frequencyType === 'everyXDays' ? frequencyInterval : undefined,
+          selectedDays: frequencyType === 'weekly' ? selectedDays : undefined,
+        },
+        startDate: startDate.toISOString(),
+        endDate: endDate.toISOString(),
+        times: times.map(time => 
+          `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`
+        ),
+        isActive: true,
+        notificationSettings: {
+          sound: notificationSound,
+          vibration: vibrationEnabled,
+          snoozeEnabled: false,
+          defaultSnoozeTime: 10
+        },
+        doses: isEditing && editingReminder ? editingReminder.doses : [],
+        notifications: isEditing && editingReminder ? editingReminder.notifications : []
+      };
+
+      let updatedReminders: Reminder[];
+      if (isEditing && editingReminder) {
+        // Cancel existing notifications before updating
+        if (editingReminder.notifications) {
+          for (const notification of editingReminder.notifications) {
+            await Notifications.cancelScheduledNotificationAsync(notification.id);
+          }
+        }
+        updatedReminders = reminders.map(r => 
+          r.id === editingReminder.id ? reminderData : r
+        );
+      } else {
+        updatedReminders = [...reminders, reminderData];
+      }
+
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
+      setReminders(updatedReminders);
+      
+      // Schedule new notifications
+      await scheduleNotifications(reminderData);
+      
+      resetForm();
+      Alert.alert(
+        t(isEditing ? 'reminders.updated' : 'reminders.added'),
+        t(isEditing ? 'reminders.reminderUpdated' : 'reminders.reminderAdded')
+      );
+    } catch (error) {
+      console.error('Error saving reminder:', error);
+      Alert.alert(t('reminders.error'), t('reminders.errorSavingReminder'));
+    }
   };
 
   const renderDosageModal = () => (
@@ -833,7 +1007,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
               </View>
               <Button
                 mode="contained"
-                onPress={handleAddReminder}
+                onPress={handleSubmit}
                 style={styles.addButton}
               >
                 {t('reminders.addNew')}
@@ -846,9 +1020,11 @@ const RemindersScreen: React.FC = (): ReactElement => {
           {reminders.length > 0 ? (
             reminders.map((reminder) => (
               <ReminderCard 
-                key={reminder.id}
-                reminder={reminder}
+                key={reminder.id} 
+                reminder={reminder} 
                 onPress={() => handleReminderPress(reminder)}
+                onEdit={handleEditReminder}
+                onDelete={handleDeleteReminder}
               />
             ))
           ) : (
@@ -994,8 +1170,10 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   reminderCard: {
-    margin: 16,
-    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 8,
+    borderRadius: 16,
+    elevation: 2,
   },
   fab: {
     position: 'absolute',
@@ -1109,20 +1287,21 @@ const styles = StyleSheet.create({
   },
   reminderHeader: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
   medicineName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginLeft: 12,
+    fontSize: 16,
+    fontWeight: '600',
+    marginBottom: 4,
   },
   reminderDetails: {
     marginLeft: 36,
   },
   dosageText: {
     fontSize: 14,
-    marginBottom: 4,
+    opacity: 0.7,
   },
   timeContainer: {
     flexDirection: 'row',
@@ -1130,8 +1309,9 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   timeText: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '500',
+    marginBottom: 8,
   },
   statusBadge: {
     alignSelf: 'flex-start',
@@ -1198,6 +1378,55 @@ const styles = StyleSheet.create({
   dosageButton: {
     margin: 4,
     minWidth: 48,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+  },
+  titleContainer: {
+    flex: 1,
+  },
+  illnessType: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  timeChip: {
+    height: 32,
+  },
+  cardContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 4,
+  },
+  iconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  cardContent: {
+    flex: 1,
+  },
+  rightContent: {
+    alignItems: 'flex-end',
+  },
+  actionIcons: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  actionIcon: {
+    margin: -8,
+  },
+  statusChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusIcon: {
+    marginRight: 4,
   },
 });
 
