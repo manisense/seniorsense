@@ -11,6 +11,7 @@ import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { format } from 'date-fns';
 import { CustomTheme } from '../../../context/ThemeContext';
 import { TouchableCard } from '../../../components/TouchableCard';
+import { STORAGE_KEYS } from '../../settings/constants';
 
 interface DatePickerEvent {
   type: string;
@@ -127,6 +128,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
   const [doseType, setDoseType] = useState<DoseType>('pill');
   const [illnessType, setIllnessType] = useState<string>('');
   const [times, setTimes] = useState<Date[]>([new Date()]);
+  const [showTimePickerIndex, setShowTimePickerIndex] = useState<number | null>(null);
   const [frequencyType, setFrequencyType] = useState<FrequencyType>('daily');
   const [frequencyInterval, setFrequencyInterval] = useState(1);
   const [selectedDays, setSelectedDays] = useState<WeekDay[]>([]);
@@ -137,7 +139,6 @@ const RemindersScreen: React.FC = (): ReactElement => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [datePickerMode, setDatePickerMode] = useState<'start' | 'end'>('start');
-  const [timePickerIndex, setTimePickerIndex] = useState<number | null>(null);
 
   // Dates and Settings
   const [startDate, setStartDate] = useState(new Date());
@@ -160,9 +161,44 @@ const RemindersScreen: React.FC = (): ReactElement => {
     initializeApp();
   }, []);
 
+  useEffect(() => {
+    const migrateAndLoadReminders = async () => {
+      try {
+        // First try to get reminders from old key
+        const oldReminders = await AsyncStorage.getItem('reminders');
+        console.log('Old reminders found:', oldReminders);
+        
+        if (oldReminders) {
+          // Save to new key
+          await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, oldReminders);
+          console.log('Migrated reminders to new key:', STORAGE_KEYS.REMINDERS);
+          
+          // Set reminders in state
+          setReminders(JSON.parse(oldReminders));
+          
+          // Clean up old key
+          await AsyncStorage.removeItem('reminders');
+        } else {
+          // Try loading from new key if no old reminders exist
+          const savedReminders = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
+          console.log('Loading from new key:', savedReminders);
+          
+          if (savedReminders) {
+            setReminders(JSON.parse(savedReminders));
+          }
+        }
+      } catch (error) {
+        console.error('Error in migrate and load:', error);
+      }
+    };
+
+    migrateAndLoadReminders();
+  }, []);
+
   const loadReminders = async () => {
     try {
-      const savedReminders = await AsyncStorage.getItem('reminders');
+      const savedReminders = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
+      console.log('Loading saved reminders:', savedReminders);
       if (savedReminders) {
         setReminders(JSON.parse(savedReminders));
       }
@@ -197,26 +233,22 @@ const RemindersScreen: React.FC = (): ReactElement => {
     }
 
     try {
-      const frequency: ReminderFrequency = {
-        type: frequencyType,
-        ...(frequencyType === 'everyXDays' && { interval: frequencyInterval }),
-        ...(frequencyType === 'weekly' && { selectedDays }),
-      };
-
-      const formattedTimes = times.map(time => 
-        `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`
-      );
-
       const newReminder: Reminder = {
         id: Date.now().toString(),
         medicineName,
         dosage: dosage.toString(),
         doseType,
         illnessType,
-        frequency,
+        frequency: {
+          type: frequencyType,
+          ...(frequencyType === 'everyXDays' && { interval: frequencyInterval }),
+          ...(frequencyType === 'weekly' && { selectedDays }),
+        },
         startDate: startDate.toISOString(),
         endDate: endDate.toISOString(),
-        times: formattedTimes,
+        times: times.map(time => 
+          `${String(time.getHours()).padStart(2, '0')}:${String(time.getMinutes()).padStart(2, '0')}`
+        ),
         isActive: true,
         notificationSettings: {
           sound: notificationSound,
@@ -229,10 +261,13 @@ const RemindersScreen: React.FC = (): ReactElement => {
       };
 
       const updatedReminders = [...reminders, newReminder];
-      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
-      setReminders(updatedReminders);
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
+      console.log('Saved reminder:', newReminder);
+      console.log('Updated reminders in storage:', JSON.stringify(updatedReminders));
       
+      setReminders(updatedReminders);
       await scheduleNotifications(newReminder);
+      setShowAddForm(false);
       resetForm();
     } catch (error) {
       console.error('Error adding reminder:', error);
@@ -298,11 +333,16 @@ const RemindersScreen: React.FC = (): ReactElement => {
     }
   };
 
-  const handleTimeChange = (index: number, event: DatePickerEvent, selectedDate?: Date) => {
+  const handleTimePickerPress = (index: number) => {
+    setShowTimePickerIndex(index);
+    setShowTimePicker(true);
+  };
+
+  const handleTimeChange = (event: DatePickerEvent, selectedDate?: Date) => {
     setShowTimePicker(false);
-    if (selectedDate) {
+    if (selectedDate && showTimePickerIndex !== null) {
       const newTimes = [...times];
-      newTimes[index] = selectedDate;
+      newTimes[showTimePickerIndex] = selectedDate;
       setTimes(newTimes);
     }
   };
@@ -325,7 +365,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
         r.id === reminder.id ? updatedReminder : r
       );
 
-      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
       setReminders(updatedReminders);
       setShowStatusModal(false);
       setSelectedReminder(null);
@@ -386,7 +426,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
         },
       });
 
-      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
       setReminders(updatedReminders);
       setShowSnoozeModal(false);
       setSelectedNotification(null);
@@ -405,7 +445,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           : reminder
       );
 
-      await AsyncStorage.setItem('reminders', JSON.stringify(updatedReminders));
+      await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
       setReminders(updatedReminders);
     } catch (error) {
       console.error('Error updating notification settings:', error);
@@ -416,6 +456,19 @@ const RemindersScreen: React.FC = (): ReactElement => {
   const handleReminderPress = (reminder: Reminder) => {
     setSelectedReminder(reminder);
     setShowStatusModal(true);
+  };
+
+  const handleDosageSelect = (selectedDosage: number) => {
+    setDosage(selectedDosage);
+    // Initialize times array with evenly spaced times throughout the day
+    const newTimes = Array(selectedDosage).fill(null).map((_, index) => {
+      const time = new Date();
+      const hoursGap = 24 / selectedDosage;
+      time.setHours(9 + Math.floor(index * hoursGap), 0, 0); // Start from 9 AM
+      return time;
+    });
+    setTimes(newTimes);
+    setShowDosageModal(false);
   };
 
   const renderDosageModal = () => (
@@ -442,16 +495,16 @@ const RemindersScreen: React.FC = (): ReactElement => {
               <Button
                 key={num}
                 mode="outlined"
-                onPress={() => {
-                  setDosage(num);
-                  setTimes(Array(num).fill(new Date()));
-                  setShowDosageModal(false);
+                onPress={() => handleDosageSelect(num)}
+                style={[styles.dosageButton, { 
+                  borderColor: theme.colors.primary,
+                  backgroundColor: dosage === num ? theme.colors.primaryContainer : 'transparent'
+                }]}
+                labelStyle={{ 
+                  color: dosage === num ? theme.colors.primary : theme.colors.text 
                 }}
-                style={styles.modalButton}
-                textColor={theme.colors.text}
-                buttonColor={theme.colors.surface}
               >
-                {`${num} ${t('reminders.doses')}`}
+                {num}
               </Button>
             ))}
           </View>
@@ -647,15 +700,97 @@ const RemindersScreen: React.FC = (): ReactElement => {
                 style={styles.input}
                 mode="outlined"
               />
-              <Button
-                mode="outlined"
+              <TouchableOpacity
                 onPress={() => setShowDosageModal(true)}
-                style={styles.button}
-                textColor={theme.colors.primary}
-                buttonColor={theme.colors.surface}
+                style={styles.dosageSelector}
               >
-                {t('reminders.selectDosage')}
-              </Button>
+                <Text style={[styles.label, { color: theme.colors.text }]}>
+                  {t('reminders.selectDosage')}
+                </Text>
+                <Text style={[styles.dosageValue, { color: theme.colors.primary }]}>
+                  {dosage} {doseType}(s)
+                </Text>
+              </TouchableOpacity>
+              {dosage > 0 && (
+                <View style={styles.timeInputsContainer}>
+                  <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                    {t('reminders.medicationTimes')}
+                  </Text>
+                  {Array.from({ length: dosage }).map((_, index) => (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => handleTimePickerPress(index)}
+                      style={[
+                        styles.timeInput,
+                        { 
+                          borderColor: theme.colors.outline,
+                          backgroundColor: theme.colors.surface
+                        }
+                      ]}
+                    >
+                      <Text style={[styles.timeLabel, { color: theme.colors.text }]}>
+                        {t('reminders.dose')} {index + 1}
+                      </Text>
+                      <Text style={[styles.timeValue, { color: theme.colors.primary }]}>
+                        {times[index]?.toLocaleTimeString([], { 
+                          hour: '2-digit',
+                          minute: '2-digit',
+                          hour12: false 
+                        })}
+                      </Text>
+                      <MaterialCommunityIcons
+                        name="clock-outline"
+                        size={24}
+                        color={theme.colors.primary}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+              <View style={styles.dateContainer}>
+                <Text style={[styles.sectionTitle, { color: theme.colors.text }]}>
+                  {t('reminders.duration')}
+                </Text>
+                <TouchableOpacity
+                  onPress={() => {
+                    setDatePickerMode('start');
+                    setShowDatePicker(true);
+                  }}
+                  style={[styles.timeInput, { borderColor: theme.colors.outline }]}
+                >
+                  <Text style={[styles.timeLabel, { color: theme.colors.text }]}>
+                    {t('reminders.startDate')}
+                  </Text>
+                  <Text style={[styles.timeValue, { color: theme.colors.primary }]}>
+                    {startDate.toLocaleDateString()}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="calendar"
+                    size={24}
+                    color={theme.colors.primary}
+                  />
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    setDatePickerMode('end');
+                    setShowDatePicker(true);
+                  }}
+                  style={[styles.timeInput, { borderColor: theme.colors.outline }]}
+                >
+                  <Text style={[styles.timeLabel, { color: theme.colors.text }]}>
+                    {t('reminders.endDate')}
+                  </Text>
+                  <Text style={[styles.timeValue, { color: theme.colors.primary }]}>
+                    {endDate.toLocaleDateString()}
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="calendar"
+                    size={24}
+                    color={theme.colors.primary}
+                  />
+                </TouchableOpacity>
+              </View>
               <Button
                 mode="outlined"
                 onPress={() => setShowFrequencyModal(true)}
@@ -739,12 +874,12 @@ const RemindersScreen: React.FC = (): ReactElement => {
           minimumDate={datePickerMode === 'end' ? startDate : new Date()}
         />
       )}
-      {showTimePicker && timePickerIndex !== null && (
+      {showTimePicker && showTimePickerIndex !== null && (
         <DateTimePicker
-          value={times[timePickerIndex]}
+          value={times[showTimePickerIndex]}
           mode="time"
-          display="default"
-          onChange={(event, date) => handleTimeChange(timePickerIndex, event, date)}
+          is24Hour={true}
+          onChange={(event, date) => handleTimeChange(event, date)}
         />
       )}
       {renderStatusModal()}
@@ -915,6 +1050,45 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 24,
     fontSize: 16,
+  },
+  timeInputsContainer: {
+    marginVertical: 16,
+  },
+  timeInput: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 16,
+    marginVertical: 8,
+    borderWidth: 1,
+    borderRadius: 8,
+  },
+  timeLabel: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  timeValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    marginBottom: 12,
+  },
+  dosageSelector: {
+    marginVertical: 8,
+    padding: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+  },
+  dosageValue: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  dosageButton: {
+    margin: 4,
+    minWidth: 48,
   },
 });
 
