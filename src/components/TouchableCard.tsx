@@ -26,7 +26,7 @@ export const TouchableCard: React.FC<TouchableCardProps> = ({
         style={[
           styles.surface,
           {
-            backgroundColor: theme.colors.surfaceVariant,
+            backgroundColor: theme.colors.surface,
           }
         ]}
       >

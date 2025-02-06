@@ -57,7 +57,7 @@ const ReminderCard = ({ reminder, onPress }: { reminder: Reminder; onPress: () =
   return (
     <TouchableCard
       onPress={onPress}
-      style={styles.reminderCard}
+      style={styles.reminderCard }
     >
       <View style={styles.reminderHeader}>
         <MaterialCommunityIcons 
@@ -759,7 +759,7 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   reminderCard: {
-    marginBottom: 12,
+    margin: 16,
     borderRadius: 12,
   },
   fab: {

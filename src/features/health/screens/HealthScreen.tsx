@@ -102,7 +102,7 @@ export const HealthScreen = () => {
     >
       {/* Vitals Cards */}
       <View style={styles.vitalsContainer}>
-        <Card style={[styles.vitalCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+        <Card style={[styles.vitalCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
             <View style={styles.vitalHeader}>
               <MaterialCommunityIcons name="heart-pulse" size={24} color={theme.colors.error} />
@@ -144,7 +144,7 @@ export const HealthScreen = () => {
           </Card.Content>
         </Card>
 
-        <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
+        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
             <Card.Title
               title={t('sos.medicalInfo')}
               titleStyle={{ color: theme.colors.text }}
@@ -177,7 +177,7 @@ export const HealthScreen = () => {
       </View>
 
       {/* AI Health Insights */}
-      <Card style={[styles.insightsCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+      <Card style={[styles.insightsCard, { backgroundColor: theme.colors.surface }]}>
         <Card.Content>
           <View style={styles.insightsHeader}>
             <Text variant="titleMedium" style={{ color: theme.colors.text }}>
@@ -209,7 +209,7 @@ export const HealthScreen = () => {
             {t('health.generateInsights')}
           </Button>
         </Card.Content>
-      </Card>
+      </Card> 
 
       {/* Add Reading Dialog */}
       <CustomDialog
@@ -259,7 +259,7 @@ export const HealthScreen = () => {
       />
 
       {showTrends && (
-        <Card style={[styles.trendCard, { backgroundColor: theme.colors.surfaceVariant }]}>
+        <Card style={[styles.trendCard, { backgroundColor: theme.colors.surface }]}>
           <Card.Content>
             <View style={styles.trendHeader}>
               <Text variant="titleMedium" style={{ color: theme.colors.text }}>
@@ -295,7 +295,7 @@ export const HealthScreen = () => {
       <Button
         mode="outlined"
         onPress={generateHealthReport}
-        style={styles.exportButton}
+        style={[styles.exportButton, { backgroundColor: theme.colors.surface }]}
         icon="file-export"
       >
         {t('health.exportData')}
