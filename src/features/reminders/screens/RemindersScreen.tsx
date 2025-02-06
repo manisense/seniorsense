@@ -9,9 +9,7 @@ import { useTranslation } from '../../../hooks/useTranslation';
 import { DoseType, Reminder, NotificationSound, NotificationData, ReminderStatus, ReminderDose, FrequencyType, WeekDay, ReminderFrequency, SnoozeInterval, ReminderNotification, ReminderNotificationSettings } from '../types/reminder.types';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import { format } from 'date-fns';
-import { CustomTheme } from '../../../context/ThemeContext';
-import { TouchableCard } from '../../../components/TouchableCard';
-import { STORAGE_KEYS } from '../../settings/constants';
+import { STORAGE_KEYS } from '../../../utils/constants';
 import { generateId, getLatestDoseStatus, getStatusColor } from '../utils/helpers';
 
 interface DatePickerEvent {
@@ -514,7 +512,6 @@ const RemindersScreen: React.FC = (): ReactElement => {
           ? { ...reminder, notificationSettings: settings }
           : reminder
       );
-
       await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, JSON.stringify(updatedReminders));
       setReminders(updatedReminders);
     } catch (error) {

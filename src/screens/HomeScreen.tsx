@@ -10,7 +10,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS } from '../features/settings/constants';
+import { STORAGE_KEYS } from '../utils/constants';
 import { Reminder, ReminderStatus } from '../features/reminders/types/reminder.types';
 
 // Add this type at the top with other interfaces
