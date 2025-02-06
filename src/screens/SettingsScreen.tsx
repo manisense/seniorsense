@@ -42,7 +42,7 @@ const SettingsScreen = () => {
             {t('settings.notifications')}
           </List.Subheader>
           <List.Item
-            title={t('settings.reminders')}
+            title={t('settings.reminders.title')}
             left={props => <List.Icon {...props} icon="bell" />}
             right={() => <Switch value={true} color={theme.colors.primary} />}
           />
@@ -58,9 +58,10 @@ const SettingsScreen = () => {
                 <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
                   {t('settings.selectLanguage')}
                 </Text>
-                {['en', 'es', 'fr'].map((lang) => (
+                {['en', 'hi', 'fr'].map((lang) => (
                   <List.Item
                     key={lang}
+                    style={[styles.modalTitle, { color: theme.colors.text }]}
                     title={t(`settings.languages.${lang}`)}
                     onPress={() => {
                       setLocale(lang);

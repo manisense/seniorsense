@@ -4,13 +4,14 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Card, TextInput, Button, Text, IconButton, Portal, Dialog, Divider } from 'react-native-paper';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
-import { STORAGE_KEYS, ProfileType, DEFAULT_PROFILE } from '../constants';
+import { STORAGE_KEYS, DEFAULT_PROFILE } from '../constants';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../navigation/StackNavigator';
 import { CustomDialog } from '@/components/CustomDialog';
 import { ProgressBar, List, Avatar } from 'react-native-paper';
 import * as Contacts from 'expo-contacts';
+import { ProfileType } from '../types/profile.types';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -22,12 +23,11 @@ export const ProfileScreen = () => {
   const [profile, setProfile] = useState<ProfileType>({
     name: '',
     age: 0,
+    bloodType: '',
     phone: '',
     email: '',
     medicalConditions: [],
     medications: [],
-    emergencyContacts: [],
-    bloodType: '',
     allergies: [],
     preferredNotificationTime: '09:00',
     language: 'en'
@@ -93,10 +93,10 @@ export const ProfileScreen = () => {
     setShowAddDialog(false);
   };
 
-  const handleDeleteItem = (type: string, index: number) => {
+  const handleDeleteItem = (type: keyof Pick<ProfileType, 'medicalConditions' | 'medications' | 'allergies'>, index: number) => {
     setProfile(prev => ({
       ...prev,
-      [type]: prev[type].filter((_, i) => i !== index)
+      [type]: prev[type].filter((_: string, i: number) => i !== index)
     }));
   };
 

@@ -9,10 +9,12 @@ import { EmergencyContact } from '../../../types';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Card, Text, Button, Portal, Dialog, Surface } from 'react-native-paper';
+import { Card, Text, Button, Portal, Dialog, Surface, Switch, IconButton } from 'react-native-paper';
 import { MD3LightTheme, PaperProvider } from 'react-native-paper';
 import { List } from 'react-native-paper';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { FallDetector } from '../utils/fallDetection';
+import { STORAGE_KEYS, FALL_DETECTION_SETTINGS } from '../constants';
 
 const STORAGE_KEY = 'emergency_contacts';
 const MAX_CONTACTS = 5;
@@ -51,9 +53,37 @@ const SOSScreen = () => {
     location: false
   });
   const [initializing, setInitializing] = useState(true);
+  const [fallDetectionEnabled, setFallDetectionEnabled] = useState(false);
+  const [fallDetector, setFallDetector] = useState<FallDetector | null>(null);
+  const [sensitivity, setSensitivity] = useState<'low' | 'medium' | 'high'>('medium');
 
   useEffect(() => {
     setupScreen();
+    const initFallDetection = async () => {
+      const enabled = await AsyncStorage.getItem(STORAGE_KEYS.FALL_DETECTION_ENABLED);
+      const savedSensitivity = await AsyncStorage.getItem(STORAGE_KEYS.FALL_DETECTION_SENSITIVITY);
+      
+      setFallDetectionEnabled(enabled === 'true');
+      if (savedSensitivity) {
+        setSensitivity(savedSensitivity as 'low' | 'medium' | 'high');
+      }
+
+      const detector = new FallDetector({
+        onFallDetected: handleFallDetected,
+        sensitivity: savedSensitivity as 'low' | 'medium' | 'high' || 'medium'
+      });
+      setFallDetector(detector);
+
+      if (enabled === 'true') {
+        detector.start();
+      }
+    };
+
+    initFallDetection();
+
+    return () => {
+      fallDetector?.stop();
+    };
   }, []);
 
   const setupScreen = async () => {
@@ -411,6 +441,52 @@ const SOSScreen = () => {
     }
   };
 
+  const handleFallDetected = async () => {
+    Alert.alert(
+      t('emergency.fallDetected'),
+      t('emergency.fallDetectedMessage'),
+      [
+        {
+          text: t('emergency.imOk'),
+          style: 'cancel',
+        },
+        {
+          text: t('emergency.getHelp'),
+          onPress: () => handleEmergency(),
+          style: 'destructive',
+        },
+      ],
+      { cancelable: false }
+    );
+  };
+
+  const toggleFallDetection = async (value: boolean) => {
+    setFallDetectionEnabled(value);
+    await AsyncStorage.setItem(STORAGE_KEYS.FALL_DETECTION_ENABLED, value.toString());
+    
+    if (value) {
+      fallDetector?.start();
+    } else {
+      fallDetector?.stop();
+    }
+  };
+
+  const handleEmergency = async () => {
+    setConfirmDialog(false);
+    setLoading(true);
+    try {
+      const location = await Location.getCurrentPositionAsync();
+      for (const contact of contacts) {
+        await sendEmergencySMS(contact, location);
+        await makeEmergencyCall(contact);
+      }
+    } catch (error) {
+      handleError(error, t('emergency.emergencyError'));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Update loading indicator
   if (initializing) {
     return (
@@ -495,34 +571,136 @@ const SOSScreen = () => {
             </Card.Content>
           </Card>
 
-          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Title
-              title={t('sos.medicalInfo')}
-              titleStyle={{ color: theme.colors.text }}
-              left={props => (
-                <MaterialCommunityIcons
-                  {...props}
-                  name="medical-bag"
-                  color={theme.colors.primary}
-                />
-              )}
-            />
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
             <Card.Content>
-              <Text style={{ color: theme.colors.textSecondary }}>
-                {t('sos.allergies')}:
-              </Text>
-              <Text style={{ color: theme.colors.text, marginBottom: 8 }}>
-                {/* Add medical info handling */}
-                {t('sos.noAllergies')}
-              </Text>
+              <View style={styles.headerRow}>
+                <Text variant="titleMedium" style={{ color: theme.colors.text }}>
+                  {t('emergency.contacts')}
+                </Text>
+                <IconButton
+                  icon="account-plus"
+                  mode="contained-tonal"
+                  size={24}
+                  onPress={handleAddContact}
+                  disabled={contacts.length >= MAX_CONTACTS}
+                  style={styles.addButton}
+                />
+              </View>
 
-              <Text style={{ color: theme.colors.textSecondary }}>
-                {t('sos.conditions')}:
-              </Text>
-              <Text style={{ color: theme.colors.text, marginBottom: 8 }}>
-                {/* Add medical info handling */}
-                {t('sos.noConditions')}
-              </Text>
+              {contacts.length === 0 ? (
+                <Text style={{ color: theme.colors.textSecondary, marginVertical: 8 }}>
+                  {t('emergency.noContacts')}
+                </Text>
+              ) : (
+                contacts.map((contact, index) => (
+                  <View key={index} style={styles.contactRow}>
+                    <View style={styles.contactInfo}>
+                      <MaterialCommunityIcons
+                        name="account-circle"
+                        size={36}
+                        color={theme.colors.primary}
+                      />
+                      <View style={styles.contactDetails}>
+                        <Text style={{ color: theme.colors.text }}>{contact.name}</Text>
+                        <Text style={{ color: theme.colors.textSecondary }}>
+                          {contact.phone}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={styles.contactActions}>
+                      <IconButton
+                        icon="phone"
+                        mode="contained-tonal"
+                        size={20}
+                        onPress={() => makeEmergencyCall(contact)}
+                      />
+                      <IconButton
+                        icon="message-text"
+                        mode="contained-tonal"
+                        size={20}
+                        onPress={() => sendEmergencySMS(contact, null)}
+                      />
+                      <IconButton
+                        icon="delete"
+                        mode="contained-tonal"
+                        size={20}
+                        onPress={() => {
+                          Alert.alert(
+                            t('emergency.deleteContact'),
+                            t('emergency.confirmDelete'),
+                            [
+                              { text: t('common.cancel'), style: 'cancel' },
+                              {
+                                text: t('common.delete'),
+                                onPress: () => handleRemoveContact(contact.id),
+                                style: 'destructive',
+                              },
+                            ]
+                          );
+                        }}
+                      />
+                    </View>
+                  </View>
+                ))
+              )}
+            </Card.Content>
+          </Card>
+
+         
+
+          <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
+            <Card.Content>
+              <View style={styles.settingRow}>
+                <View style={styles.settingInfo}>
+                  <Text variant="titleMedium" style={{ color: theme.colors.text }}>
+                    {t('emergency.fallDetection.title')}
+                  </Text>
+                  <Text variant="bodySmall" style={{ color: theme.colors.textSecondary }}>
+                    {t('emergency.fallDetection.description')}
+                  </Text>
+                </View>
+                <Switch
+                  value={fallDetectionEnabled}
+                  onValueChange={toggleFallDetection}
+                />
+              </View>
+              {fallDetectionEnabled && (
+                <View style={styles.sensitivityContainer}>
+                  <Text variant="bodyMedium" style={{ color: theme.colors.text }}>
+                    {t('emergency.fallDetection.sensitivity')}
+                  </Text>
+                  <View style={styles.sensitivityButtons}>
+                    {FALL_DETECTION_SETTINGS.SENSITIVITIES.map((level) => (
+                      <TouchableOpacity
+                        key={level}
+                        style={[
+                          styles.sensitivityButton,
+                          sensitivity === level && {
+                            backgroundColor: theme.colors.primaryContainer
+                          }
+                        ]}
+                        onPress={async () => {
+                          setSensitivity(level);
+                          await AsyncStorage.setItem(STORAGE_KEYS.FALL_DETECTION_SENSITIVITY, level);
+                          if (fallDetector) {
+                            fallDetector.stop();
+                            const newDetector = new FallDetector({
+                              onFallDetected: handleFallDetected,
+                              sensitivity: level
+                            });
+                            setFallDetector(newDetector);
+                            newDetector.start();
+                          }
+                        }}
+                      >
+                        <Text style={{ color: theme.colors.text }}>
+                          {t(`emergency.fallDetection.${level}`)}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+              )}
             </Card.Content>
           </Card>
         </ScrollView>
@@ -595,6 +773,61 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 12,
     marginBottom: 8,
+  },
+  settingRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  settingInfo: {
+    flex: 1,
+    marginRight: 16,
+  },
+  sensitivityContainer: {
+    marginTop: 8,
+  },
+  sensitivityButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 8,
+    gap: 8,
+  },
+  sensitivityButton: {
+    flex: 1,
+    padding: 8,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  contactRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+  },
+  contactInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  contactDetails: {
+    marginLeft: 12,
+    flex: 1,
+  },
+  contactActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  addButton: {
+    marginLeft: 8,
   },
 });
 
