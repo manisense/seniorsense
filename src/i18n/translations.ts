@@ -114,7 +114,8 @@ export default {
       removeTime: 'Remove Time',
       snooze: 'Snooze',
       snoozeTime: 'Snooze Time',
-      minutes: 'minutes'
+      minutes: 'minutes',
+      noUpcoming: 'No upcoming reminders',
     },
     feed: {
       healthTips: 'Health Tips',

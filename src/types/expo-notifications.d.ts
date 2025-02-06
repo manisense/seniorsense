@@ -31,8 +31,24 @@ declare module 'expo-notifications' {
     }>;
   }
 
-  export function requestPermissionsAsync(): Promise<NotificationPermissionsStatus>;
+  export function requestPermissionsAsync(): Promise<{ status: string }>;
   export function setNotificationHandler(handler: NotificationHandler): Promise<void>;
-  export function scheduleNotificationAsync(request: NotificationRequestInput): Promise<string>;
+  export function scheduleNotificationAsync(options: {
+    content: {
+      title: string;
+      body: string;
+      sound?: string;
+    };
+    trigger: { seconds: number } | null;
+  }): Promise<string>;
   export function cancelScheduledNotificationAsync(identifier: string): Promise<void>;
+  export function setNotificationChannelAsync(
+    channelId: string,
+    channelConfig: {
+      name: string;
+      importance: number;
+      vibrationPattern?: number[];
+      lightColor?: string;
+    }
+  ): Promise<void>;
 }

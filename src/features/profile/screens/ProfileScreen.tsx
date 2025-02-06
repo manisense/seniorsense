@@ -100,20 +100,6 @@ export const ProfileScreen = () => {
     }));
   };
 
-  const pickContact = async () => {
-    try {
-      const { status } = await Contacts.requestPermissionsAsync();
-      if (status === 'granted') {
-        const contact = await Contacts.getContactsAsync({
-          fields: [Contacts.Fields.PhoneNumbers, Contacts.Fields.Name],
-        });
-        // Handle selected contact
-      }
-    } catch (error) {
-      Alert.alert(t('profile.contactError'));
-    }
-  };
-
   return (
     <ScrollView 
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -202,50 +188,6 @@ export const ProfileScreen = () => {
             style={styles.input}
             mode="outlined"
           />
-        </Card.Content>
-      </Card>
-
-      {/* Medical Information */}
-      <Card style={[styles.card, { backgroundColor: theme.colors.surfaceVariant }]}>
-        <Card.Content>
-          <Text variant="titleMedium" style={{ color: theme.colors.text, marginBottom: 16 }}>
-            {t('profile.medicalInfo')}
-          </Text>
-          
-          <View style={styles.section}>
-            <Text variant="titleSmall" style={{ color: theme.colors.text, marginBottom: 8 }}>
-              {t('profile.conditions')}
-            </Text>
-            {profile.medicalConditions.map((condition, index) => (
-              <View key={index} style={styles.itemContainer}>
-                <Text style={{ color: theme.colors.text }}>{condition}</Text>
-                {isEditing && (
-                  <IconButton
-                    icon="delete"
-                    size={20}
-                    onPress={() => handleDeleteItem('medicalConditions', index)}
-                  />
-                )}
-              </View>
-            ))}
-            {isEditing && (
-              <Button
-                mode="outlined"
-                onPress={() => {
-                  setDialogType('condition');
-                  setShowAddDialog(true);
-                }}
-                style={styles.addButton}
-              >
-                {t('profile.addCondition')}
-              </Button>
-            )}
-          </View>
-
-          <Divider style={styles.divider} />
-
-          {/* Similar sections for Medications and Allergies */}
-          {/* ... */}
         </Card.Content>
       </Card>
 

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ScrollView, StyleSheet, View, Image, TouchableOpacity } from 'react-native';
 import { Text, Surface, Avatar, FAB } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
@@ -6,6 +6,12 @@ import { useTranslation } from '../hooks/useTranslation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { TouchableCard } from '../components/TouchableCard';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../navigation/types';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { STORAGE_KEYS } from '../features/settings/constants';
+import { Reminder, ReminderStatus } from '../features/reminders/types/reminder.types';
 
 // Add this type at the top with other interfaces
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
@@ -32,6 +38,17 @@ interface MedicationReminderProps {
   time: string;
 }
 
+interface HealthTip {
+  id: string;
+  title: string;
+  summary: string;
+  image: any;
+  content: string;
+  date: string;
+  icon: IconName;
+  iconColor: string;
+}
+
 type TabParamList = {
   Home: undefined;
   Reminders: undefined;
@@ -42,6 +59,84 @@ type TabParamList = {
 const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabParamList> }) => {
   const { t } = useTranslation();
   const { isDark, theme } = useTheme();  // Use isDark and theme from theme
+  const stackNavigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+
+  // Add state for daily tip
+  const [dailyTip, setDailyTip] = useState<HealthTip>({
+    id: '1',
+    title: 'Daily Health Tip',
+    summary: 'Taking 10 minutes for mindful meditation each morning can help reduce stress and improve focus throughout your day.',
+    image: require('../assets/meditation.png'),
+    content: 'Full meditation guide and benefits...',
+    date: new Date().toISOString(),
+    icon: 'lightbulb',
+    iconColor: '#FFD700'
+  });
+
+  // Add state for reminders
+  const [upcomingReminders, setUpcomingReminders] = useState<Reminder[]>([]);
+
+  // Add useEffect to load reminders
+  useEffect(() => {
+    loadUpcomingReminders();
+  }, []);
+
+  // Add useEffect dependency on navigation to refresh when returning to screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadUpcomingReminders();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadUpcomingReminders = async () => {
+    try {
+      const savedReminders = await AsyncStorage.getItem('reminders');
+      console.log('Loading reminders with key "reminders":', savedReminders);
+      
+      if (savedReminders) {
+        const allReminders: Reminder[] = JSON.parse(savedReminders);
+        
+        // Filter out any past reminders and get upcoming ones
+        const now = new Date();
+        const currentTime = now.getTime();
+
+        const upcoming = allReminders
+          .filter(reminder => {
+            if (!reminder.times || reminder.times.length === 0) return false;
+            
+            // Check the latest dose status
+            const latestDose = reminder.doses?.[reminder.doses.length - 1];
+            if (latestDose && ['taken', 'missed'].includes(latestDose.status)) return false;
+            
+            // Convert time string to today's date for comparison
+            const [hours, minutes] = reminder.times[0].split(':');
+            const reminderTime = new Date();
+            reminderTime.setHours(parseInt(hours, 10));
+            reminderTime.setMinutes(parseInt(minutes, 10));
+            
+            return reminderTime.getTime() > currentTime;
+          })
+          .sort((a, b) => {
+            // Sort by time
+            const [hoursA, minutesA] = a.times[0].split(':');
+            const [hoursB, minutesB] = b.times[0].split(':');
+            const timeA = new Date().setHours(parseInt(hoursA, 10), parseInt(minutesA, 10));
+            const timeB = new Date().setHours(parseInt(hoursB, 10), parseInt(minutesB, 10));
+            return timeA - timeB;
+          })
+          .slice(0, 3);
+        
+        console.log('Filtered upcoming reminders:', upcoming);
+        setUpcomingReminders(upcoming);
+      } else {
+        console.log('No reminders found in storage');
+      }
+    } catch (error) {
+      console.error('Error loading reminders:', error);
+    }
+  };
 
   const QuickActionButton: React.FC<QuickActionButtonProps> = ({ 
     icon, 
@@ -95,6 +190,17 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
     );
   };
 
+  const formatTime = (timeStr: string) => {
+    try {
+      const [hours, minutes] = timeStr.split(':');
+      const time = new Date();
+      time.setHours(parseInt(hours), parseInt(minutes));
+      return time.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    } catch (error) {
+      return timeStr;
+    }
+  };
+
   const MedicationReminder: React.FC<MedicationReminderProps> = ({ medicine, dosage, time }) => {
     return (
       <Surface style={[styles.reminderCard, { backgroundColor: theme.colors.surface }]}>
@@ -110,7 +216,7 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
           </Text>
         </View>
         <Text style={[styles.timeText, { color: theme.colors.primary }]}>
-          {time}
+          {formatTime(time)}
         </Text>
       </Surface>
     );
@@ -145,44 +251,55 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
         </View>
 
         {/* Daily Health Tip */}
-        <Surface style={[styles.tipCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
-          <View style={styles.tipHeader}>
-            <MaterialCommunityIcons name="lightbulb" size={24} color="#FFD700" />
-            <Text style={[styles.tipTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-              Daily Health Tip
-            </Text>
-          </View>
-          <View style={styles.tipContent}>
-            <Image
-              source={require('../assets/meditation.png')}
-              style={styles.tipImage}
-            />
-            <Text style={[styles.tipText, { color: isDark ? '#9CA3AF' : '#666' }]}>
-              Taking 10 minutes for mindful meditation each morning can help reduce stress and improve focus throughout your day.
-            </Text>
-          </View>
-        </Surface>
+        <TouchableCard
+          onPress={() => stackNavigation.navigate('FeedDetail', { item: dailyTip })}
+          style={styles.tipCardContainer}
+        >
+          
+            <View style={styles.tipHeader}>
+              <MaterialCommunityIcons 
+                name={dailyTip.icon} 
+                size={24} 
+                color={dailyTip.iconColor} 
+              />
+              <Text style={[styles.tipTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+                {dailyTip.title}
+              </Text>
+            </View>
+            <View style={styles.tipContent}>
+              <Image
+                source={dailyTip.image}
+                style={styles.tipImage}
+              />
+              <Text 
+                style={[styles.tipText, { color: isDark ? '#9CA3AF' : '#666' }]}
+                numberOfLines={3}
+              >
+                {dailyTip.summary}
+              </Text>
+            </View>
+         
+        </TouchableCard>
 
         {/* Upcoming Reminders */}
         <Text style={[styles.sectionTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-          Upcoming Reminders
+          {t('home.upcomingMedications')}
         </Text>
-        <MedicationReminder
-          medicine="Metformin"
-          dosage="500mg - 1 tablet"
-          time="9:00 AM"
-          
-        />
-        <MedicationReminder
-          medicine="Lisinopril"
-          dosage="10mg - 1 tablet"
-          time="2:00 PM"
-        />
-        <MedicationReminder
-          medicine="Aspirin"
-          dosage="81mg - 1 tablet"
-          time="8:00 PM"
-        />
+        
+        {upcomingReminders.length === 0 ? (
+          <Text style={[styles.noReminders, { color: theme.colors.textSecondary }]}>
+            {t('reminders.noUpcoming')}
+          </Text>
+        ) : (
+          upcomingReminders.map((reminder) => (
+            <MedicationReminder
+              key={reminder.id}
+              medicine={reminder.medicineName}
+              dosage={`${reminder.dosage} ${reminder.doseType}`}
+              time={reminder.times[0]}
+            />
+          ))
+        )}
 
         {/* Health Summary */}
         <Text style={[styles.sectionTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
@@ -263,12 +380,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     lineHeight: 18,
   },
-  tipCard: {
+  tipCardContainer: {
     margin: 16,
+  },
+  tipCard: {
     padding: 16,
     borderRadius: 16,
     elevation: 2,
-    backgroundColor: '#fff',
   },
   tipHeader: {
     flexDirection: 'row',
@@ -373,6 +491,11 @@ const styles = StyleSheet.create({
     bottom: 0,
     borderRadius: 28,
     elevation: 4,
+  },
+  noReminders: {
+    textAlign: 'center',
+    marginVertical: 16,
+    fontSize: 14,
   },
 });
 
