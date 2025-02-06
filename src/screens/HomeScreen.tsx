@@ -1,6 +1,6 @@
 import React from 'react';
 import { ScrollView, StyleSheet, View, Image, TouchableOpacity } from 'react-native';
-import { Text, Surface, Avatar } from 'react-native-paper';
+import { Text, Surface, Avatar, FAB } from 'react-native-paper';
 import { useTheme } from '../context/ThemeContext';
 import { useTranslation } from '../hooks/useTranslation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -59,7 +59,7 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
       >
         <View style={[
           styles.quickAction,
-          { backgroundColor: backgroundColor || theme.colors.surfaceVariant }
+          { backgroundColor: backgroundColor || theme.colors.surface }
         ]}>
           <MaterialCommunityIcons 
             name={icon} 
@@ -116,98 +116,117 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
     );
   };
 
+  // Add voice assistant handler
+  const handleVoiceAssistant = () => {
+    // Voice assistant logic will go here
+    console.log('Voice assistant activated');
+  };
+
   return (
-    <ScrollView style={[styles.container, { backgroundColor: isDark ? '#1F2937' : '#F5F5F5' }]}>
-      
-      <View style={styles.quickActions}>
-        <QuickActionButton
-          icon="pill"
-          title="Add\nReminder"
-          onPress={() => navigation.jumpTo('Reminders')}
-        />
-        <QuickActionButton
-          icon="heart"
-          title="Health\nData"
-          onPress={() => navigation.jumpTo('Health')}
-        />
-        <QuickActionButton
-          icon="phone"
-          title="SOS"
-          onPress={() => navigation.jumpTo('SOS')}
-        />
-      </View>
-
-      {/* Daily Health Tip */}
-      <Surface style={[styles.tipCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
-        <View style={styles.tipHeader}>
-          <MaterialCommunityIcons name="lightbulb" size={24} color="#FFD700" />
-          <Text style={[styles.tipTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-            Daily Health Tip
-          </Text>
-        </View>
-        <View style={styles.tipContent}>
-          <Image
-            source={require('../assets/meditation.png')}
-            style={styles.tipImage}
-          />
-          <Text style={[styles.tipText, { color: isDark ? '#9CA3AF' : '#666' }]}>
-            Taking 10 minutes for mindful meditation each morning can help reduce stress and improve focus throughout your day.
-          </Text>
-        </View>
-      </Surface>
-
-      {/* Upcoming Reminders */}
-      <Text style={[styles.sectionTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-        Upcoming Reminders
-      </Text>
-      <MedicationReminder
-        medicine="Metformin"
-        dosage="500mg - 1 tablet"
-        time="9:00 AM"
+    <>
+      <ScrollView style={[styles.container, { backgroundColor: isDark ? '#1F2937' : '#F5F5F5' }]}>
         
-      />
-      <MedicationReminder
-        medicine="Lisinopril"
-        dosage="10mg - 1 tablet"
-        time="2:00 PM"
-      />
-      <MedicationReminder
-        medicine="Aspirin"
-        dosage="81mg - 1 tablet"
-        time="8:00 PM"
-      />
+        <View style={styles.quickActions}>
+          <QuickActionButton
+            icon="pill"
+            title="Add Reminder"
+            onPress={() => navigation.jumpTo('Reminders')}
+          />
+          <QuickActionButton
+            icon="heart"
+            title="Health Data"
+            onPress={() => navigation.jumpTo('Health')}
+          />
+          <QuickActionButton
+            icon="phone"
+            title="SOS"
+            onPress={() => navigation.jumpTo('SOS')}
+          />
+        </View>
 
-      {/* Health Summary */}
-      <Text style={[styles.sectionTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
-        Health Summary
-      </Text>
-      <View style={styles.healthMetrics}>
-        <Surface style={[styles.metricCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
-          <HealthMetricCard
-            icon="heart-pulse"
-            value="120/80"
-            label="Blood Pressure"
-            iconColor="#4CAF50"
-          />
+        {/* Daily Health Tip */}
+        <Surface style={[styles.tipCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
+          <View style={styles.tipHeader}>
+            <MaterialCommunityIcons name="lightbulb" size={24} color="#FFD700" />
+            <Text style={[styles.tipTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+              Daily Health Tip
+            </Text>
+          </View>
+          <View style={styles.tipContent}>
+            <Image
+              source={require('../assets/meditation.png')}
+              style={styles.tipImage}
+            />
+            <Text style={[styles.tipText, { color: isDark ? '#9CA3AF' : '#666' }]}>
+              Taking 10 minutes for mindful meditation each morning can help reduce stress and improve focus throughout your day.
+            </Text>
+          </View>
         </Surface>
-        <Surface style={[styles.metricCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
-          <HealthMetricCard
-            icon="water-percent"
-            value="110"
-            label="Glucose"
-            iconColor="#FFC107"
-          />
-        </Surface>
-        <Surface style={[styles.metricCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
-          <HealthMetricCard
-            icon="scale"
-            value="165 lbs"
-            label="Weight"
-            iconColor="#2196F3"
-          />
-        </Surface>
-      </View>
-    </ScrollView>
+
+        {/* Upcoming Reminders */}
+        <Text style={[styles.sectionTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+          Upcoming Reminders
+        </Text>
+        <MedicationReminder
+          medicine="Metformin"
+          dosage="500mg - 1 tablet"
+          time="9:00 AM"
+          
+        />
+        <MedicationReminder
+          medicine="Lisinopril"
+          dosage="10mg - 1 tablet"
+          time="2:00 PM"
+        />
+        <MedicationReminder
+          medicine="Aspirin"
+          dosage="81mg - 1 tablet"
+          time="8:00 PM"
+        />
+
+        {/* Health Summary */}
+        <Text style={[styles.sectionTitle, { color: isDark ? '#F9FAFB' : '#111827' }]}>
+          Health Summary
+        </Text>
+        <View style={styles.healthMetrics}>
+          <Surface style={[styles.metricCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
+            <HealthMetricCard
+              icon="heart-pulse"
+              value="120/80"
+              label="Blood Pressure"
+              iconColor="#4CAF50"
+            />
+          </Surface>
+          <Surface style={[styles.metricCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
+            <HealthMetricCard
+              icon="water-percent"
+              value="110"
+              label="Glucose"
+              iconColor="#FFC107"
+            />
+          </Surface>
+          <Surface style={[styles.metricCard, { backgroundColor: isDark ? '#374151' : '#fff' }]}>
+            <HealthMetricCard
+              icon="scale"
+              value="165 lbs"
+              label="Weight"
+              iconColor="#2196F3"
+            />
+          </Surface>
+        </View>
+      </ScrollView>
+
+      {/* Add FAB for voice assistant */}
+      <FAB
+        icon="microphone"
+        style={[
+          styles.fab,
+          { backgroundColor: theme.colors.primary }
+        ]}
+        color={theme.colors.surface}
+        onPress={handleVoiceAssistant}
+      />
+    </>
   );
 };
 
@@ -346,6 +365,14 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     textAlign: 'center',
+  },
+  fab: {
+    position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
+    elevation: 4,
   },
 });
 
