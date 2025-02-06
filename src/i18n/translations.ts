@@ -102,7 +102,7 @@ export default {
         tablet: 'Tablet',
         capsule: 'Capsule',
         injection: 'Injection',
-        drops: 'Drops',
+        eyeDrops: 'Eye Drops',
         syrup: 'Syrup',
         inhaler: 'Inhaler'
       },
@@ -117,7 +117,7 @@ export default {
       snooze: 'Snooze',
       snoozeTime: 'Snooze Time',
       minutes: 'minutes',
-      noUpcoming: 'No upcoming reminders',
+      noUpcoming: 'No upcoming reminders today',
       dose: 'Dose',
       medicationTimes: 'Medication Times',
       duration: 'Duration',
@@ -136,7 +136,15 @@ export default {
         done: 'Done',
         cancel: 'Cancel',
         save: 'Save'
-      }
+      },
+      confirmDelete: "Confirm Delete",
+      deleteConfirmMessage: "Are you sure you want to delete this reminder?",
+      deleted: "Deleted",
+      reminderDeleted: "Reminder has been deleted",
+      updated: "Updated",
+      reminderUpdated: "Reminder has been updated",
+      errorDeletingReminder: "Error deleting reminder",
+      errorSavingReminder: "Error saving reminder"
     },
     feed: {
       healthTips: 'Health Tips',
@@ -549,7 +557,7 @@ export default {
         tablet: 'टैबलेट',
         capsule: 'कैप्सूल',
         injection: 'इंजेक्शन',
-        drops: 'ड्रॉप्स',
+        eyeDrops: 'आँखें ड्रॉप्स',
         syrup: 'सिरप',
         inhaler: 'इनहेलर'
       },
@@ -580,7 +588,15 @@ export default {
         done: 'पूर्ण',
         cancel: 'रद्द करें',
         save: 'सहेजें'
-      }
+      },
+      confirmDelete: "Confirm Delete",
+      deleteConfirmMessage: "Are you sure you want to delete this reminder?",
+      deleted: "Deleted",
+      reminderDeleted: "Reminder has been deleted",
+      updated: "Updated",
+      reminderUpdated: "Reminder has been updated",
+      errorDeletingReminder: "Error deleting reminder",
+      errorSavingReminder: "Error saving reminder"
     },
     feed: {
       healthTips: 'स्वास्थ्य टिप्स',
