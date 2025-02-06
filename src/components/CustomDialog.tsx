@@ -4,34 +4,34 @@ import { Modal, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
 interface CustomDialogProps {
   visible: boolean;
-  title: string;
   onDismiss: () => void;
-  onConfirm: () => void;
-  onCancel: () => void;
-  children: React.ReactNode;
+  title: string;
+  content: React.ReactNode;
+  actions?: Array<{
+    label: string;
+    onPress: () => void;
+  }>;
 }
 
 export const CustomDialog: React.FC<CustomDialogProps> = ({
   visible,
-  title,
   onDismiss,
-  onConfirm,
-  onCancel,
-  children,
+  title,
+  content,
+  actions,
 }) => {
   return (
     <Modal transparent visible={visible} animationType="fade">
       <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={onDismiss}>
         <View style={styles.dialogContainer}>
           <Text style={styles.dialogTitle}>{title}</Text>
-          <View style={styles.dialogContent}>{children}</View>
+          <View style={styles.dialogContent}>{content}</View>
           <View style={styles.dialogActions}>
-            <TouchableOpacity onPress={onCancel}>
-              <Text style={styles.dialogButton}>Cancel</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onConfirm}>
-              <Text style={styles.dialogButton}>Confirm</Text>
-            </TouchableOpacity>
+            {actions?.map((action, index) => (
+              <TouchableOpacity key={index} onPress={action.onPress}>
+                <Text style={styles.dialogButton}>{action.label}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
         </View>
       </TouchableOpacity>
