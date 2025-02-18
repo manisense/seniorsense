@@ -117,7 +117,7 @@ const TabNavigator = () => {
         component={FeedScreen}
         options={{
           tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="rss" size={size} color={color} />
+            <MaterialCommunityIcons name="animation-play" size={size} color={color} />
           ),
         }}
       />
