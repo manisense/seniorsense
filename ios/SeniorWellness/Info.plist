@@ -59,6 +59,8 @@
     <string>This app needs access to location to send in emergency situations.</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>This app needs access to microphone for emergency calls.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>Allow $(PRODUCT_NAME) to access your device motion</string>
     <key>NSSpeechRecognitionUsageDescription</key>
     <string>This app needs access to speech recognition for voice commands in emergency.</string>
     <key>UILaunchStoryboardName</key>

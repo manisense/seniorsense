@@ -38,7 +38,7 @@
       },
       "permissions": [
         "android.permission.READ_CONTACTS",
-        "android.permission.WRITE_CONTACTS", 
+        "android.permission.WRITE_CONTACTS",
         "android.permission.READ_PHONE_STATE",
         "android.permission.SEND_SMS",
         "android.permission.CALL_PHONE",
@@ -65,14 +65,12 @@
         }
       ],
       "expo-system-ui",
-      [
-        "expo-notifications",
-        {
-          "icon": "./assets/notification-icon.png",
-          "color": "#ffffff",
-          "sounds": ["./assets/notification-sound.wav"]
-        }
-      ]
-    ]
+      "expo-notifications"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1fa43a4b-6b8b-4c46-8725-93c17f4b0f3f"
+      }
+    }
   }
 }
