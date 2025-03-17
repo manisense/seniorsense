@@ -270,6 +270,11 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
             title="SOS"
             onPress={() => navigation.jumpTo('SOS')}
           />
+          <QuickActionButton
+            icon="pill-multiple"
+            title={t('medicineIdentifier.title')}
+            onPress={() => navigation.navigate('MedicineIdentifier')}
+          />
         </View>
 
         {/* Daily Health Tip */}

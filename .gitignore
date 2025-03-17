@@ -110,4 +110,27 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 
+
+# sql scripts
+
+*.sql
+
 # @end expo-cli
+
+# ---------------------------
+# React Native
+# ---------------------------
+# iOS
+ios/
+
+# Android
+android/
+
+# ---------------------------
+# Expo
+# ---------------------------
+# iOS
+ios/
+
+# Android
+android/
