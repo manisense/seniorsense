@@ -256,6 +256,7 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
       <ScrollView style={[styles.container, { backgroundColor: isDark ? '#1F2937' : '#F5F5F5' }]}>
         
         <View style={styles.quickActions}>
+          <View style={styles.quickActionRow}>
           <QuickActionButton
             icon="pill"
             title="Add Reminder"
@@ -266,6 +267,8 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
             title="Health Data"
             onPress={() => navigation.jumpTo('Health')}
           />
+          </View>
+          <View style={styles.quickActionRow}>
           <QuickActionButton
             icon="phone"
             title="SOS"
@@ -276,6 +279,7 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
             title={t('medicineIdentifier.title')}
             onPress={() => navigation.navigate('MedicineIdentifier')}
           />
+          </View>
         </View>
 
         {/* Daily Health Tip */}
@@ -386,9 +390,18 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   quickActions: {
-    flexDirection: 'row',
     gap: 16,
     padding: 16,
+    flexDirection: 'column',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+  },
+  quickActionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 16,
+    alignItems: 'center',
   },
   quickActionContainer: {
     flex: 1,
