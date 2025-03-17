@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, StyleSheet, View, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Card, TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
+import { Alert, StyleSheet, View, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView, StatusBar } from 'react-native';
+import { Card, TextInput, Button, Text, ActivityIndicator, useTheme as usePaperTheme } from 'react-native-paper';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useAuth } from '../../../context/AuthContext';
@@ -9,6 +9,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 
 export const SignInScreen = ({ navigation }: { navigation: any }) => {
   const { theme } = useTheme();
+  const paperTheme = usePaperTheme();
   const { t } = useTranslation();
   const { signIn, signInWithGoogle, error, loading, clearError } = useAuth();
   
@@ -99,117 +100,125 @@ export const SignInScreen = ({ navigation }: { navigation: any }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar backgroundColor={theme.colors.background} barStyle={theme.dark ? 'light-content' : 'dark-content'} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../../../../assets/icon.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={[styles.appTitle, { color: theme.colors.primary }]}>
-            {t('app.name')}
-          </Text>
-        </View>
-        
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <Text style={styles.title}>{t('auth.signIn')}</Text>
-            
-            <TextInput
-              label={t('auth.email')}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setEmailError('');
-              }}
-              mode="outlined"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              error={!!emailError}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('./../../../assets/icon.png')} 
+              style={styles.logo}
+              resizeMode="contain"
             />
-            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-            
-            <View style={styles.passwordContainer}>
+            <Text style={[styles.appTitle, { color: theme.colors.primary }]}>
+              {t('app.name')}
+            </Text>
+          </View>
+          
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={4}>
+            <Card.Content>
+              <Text style={[styles.title, { color: theme.colors.text }]}>{t('auth.signIn')}</Text>
+              
               <TextInput
-                label={t('auth.password')}
-                value={password}
+                label={t('auth.email')}
+                value={email}
                 onChangeText={(text) => {
-                  setPassword(text);
-                  setPasswordError('');
+                  setEmail(text);
+                  setEmailError('');
                 }}
                 mode="outlined"
-                secureTextEntry={!showPassword}
+                keyboardType="email-address"
+                autoCapitalize="none"
                 style={styles.input}
-                error={!!passwordError}
-                right={
-                  <TextInput.Icon
-                    icon={showPassword ? 'eye-off' : 'eye'}
-                    onPress={() => setShowPassword(!showPassword)}
-                  />
-                }
+                error={!!emailError}
+                theme={paperTheme}
               />
-              {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-            </View>
-            
-            <TouchableOpacity
-              style={styles.forgotPassword}
-              onPress={navigateToForgotPassword}
-            >
-              <Text style={{ color: theme.colors.primary }}>
-                {t('auth.forgotPassword')}
-              </Text>
-            </TouchableOpacity>
-            
-            <Button
-              mode="contained"
-              onPress={handleSignIn}
-              disabled={loading}
-              style={styles.button}
-            >
-              {loading ? (
-                <ActivityIndicator color={theme.colors.onPrimary} size="small" />
-              ) : (
-                t('auth.signIn')
-              )}
-            </Button>
-            
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>{t('auth.orContinueWith')}</Text>
-              <View style={styles.dividerLine} />
-            </View>
-            
-            <Button
-              mode="outlined"
-              onPress={handleGoogleSignIn}
-              icon="google"
-              style={styles.googleButton}
-              disabled={loading}
-            >
-              {t('auth.continueWithGoogle')}
-            </Button>
-            
-            <View style={styles.signUpContainer}>
-              <Text>{t('auth.noAccount')}</Text>
-              <TouchableOpacity onPress={navigateToSignUp}>
-                <Text style={{ color: theme.colors.primary, marginLeft: 5 }}>
-                  {t('auth.signUp')}
+              {emailError ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{emailError}</Text> : null}
+              
+              <View style={styles.passwordContainer}>
+                <TextInput
+                  label={t('auth.password')}
+                  value={password}
+                  onChangeText={(text) => {
+                    setPassword(text);
+                    setPasswordError('');
+                  }}
+                  mode="outlined"
+                  secureTextEntry={!showPassword}
+                  style={styles.input}
+                  error={!!passwordError}
+                  theme={paperTheme}
+                  right={
+                    <TextInput.Icon
+                      icon={showPassword ? 'eye-off' : 'eye'}
+                      onPress={() => setShowPassword(!showPassword)}
+                      color={theme.colors.primary}
+                    />
+                  }
+                />
+                {passwordError ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{passwordError}</Text> : null}
+              </View>
+              
+              <TouchableOpacity
+                style={styles.forgotPassword}
+                onPress={navigateToForgotPassword}
+              >
+                <Text style={{ color: theme.colors.primary }}>
+                  {t('auth.forgotPassword')}
                 </Text>
               </TouchableOpacity>
-            </View>
-          </Card.Content>
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+              
+              <Button
+                mode="contained"
+                onPress={handleSignIn}
+                disabled={loading}
+                style={[styles.button, { backgroundColor: loading ? theme.colors.disabled : theme.colors.primary }]}
+                labelStyle={{ color: theme.colors.onPrimary }}
+              >
+                {loading ? (
+                  <ActivityIndicator color={theme.colors.onPrimary} size="small" />
+                ) : (
+                  t('auth.signIn')
+                )}
+              </Button>
+              
+              <View style={styles.divider}>
+                <View style={[styles.dividerLine, { backgroundColor: theme.colors.outline }]} />
+                <Text style={[styles.dividerText, { color: theme.colors.text }]}>{t('auth.orContinueWith')}</Text>
+                <View style={[styles.dividerLine, { backgroundColor: theme.colors.outline }]} />
+              </View>
+              
+              <Button
+                mode="outlined"
+                onPress={handleGoogleSignIn}
+                icon="google"
+                style={[styles.googleButton, { borderColor: theme.colors.outline }]}
+                disabled={loading}
+                labelStyle={{ color: theme.colors.text }}
+              >
+                {t('auth.continueWithGoogle')}
+              </Button>
+              
+              <View style={styles.signUpContainer}>
+                <Text style={{ color: theme.colors.text }}>{t('auth.noAccount')}</Text>
+                <TouchableOpacity onPress={navigateToSignUp}>
+                  <Text style={{ color: theme.colors.primary, marginLeft: 5, fontWeight: 'bold' }}>
+                    {t('auth.signUp')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -231,28 +240,31 @@ const styles = StyleSheet.create({
     height: 100,
   },
   appTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     marginTop: 8,
   },
   card: {
-    borderRadius: 8,
+    borderRadius: 12,
     elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
     marginBottom: 24,
     textAlign: 'center',
   },
   input: {
     marginBottom: 8,
+    backgroundColor: '#fff'
   },
   passwordContainer: {
     marginBottom: 8,
   },
   errorText: {
-    color: 'red',
     fontSize: 12,
     marginBottom: 8,
     marginTop: -4,
@@ -260,10 +272,12 @@ const styles = StyleSheet.create({
   forgotPassword: {
     alignSelf: 'flex-end',
     marginBottom: 16,
+    padding: 4,
   },
   button: {
     marginBottom: 16,
     paddingVertical: 8,
+    borderRadius: 8,
   },
   divider: {
     flexDirection: 'row',
@@ -273,18 +287,18 @@ const styles = StyleSheet.create({
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#e0e0e0',
   },
   dividerText: {
     marginHorizontal: 8,
-    color: '#757575',
   },
   googleButton: {
     marginBottom: 16,
+    borderRadius: 8,
   },
   signUpContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 8,
+    padding: 8,
   },
 });

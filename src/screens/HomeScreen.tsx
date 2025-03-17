@@ -54,6 +54,7 @@ type TabParamList = {
   Reminders: undefined;
   Health: undefined;
   SOS: undefined;
+  MedicineIdentifier: undefined;
 };
 
 const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabParamList> }) => {
@@ -271,7 +272,7 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
             onPress={() => navigation.jumpTo('SOS')}
           />
           <QuickActionButton
-            icon="pill-multiple"
+            icon="pill"
             title={t('medicineIdentifier.title')}
             onPress={() => navigation.navigate('MedicineIdentifier')}
           />

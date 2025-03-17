@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Alert, StyleSheet, View, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { Card, TextInput, Button, Text, ActivityIndicator } from 'react-native-paper';
+import { Alert, StyleSheet, View, TouchableOpacity, Image, KeyboardAvoidingView, Platform, ScrollView, StatusBar } from 'react-native';
+import { Card, TextInput, Button, Text, ActivityIndicator, useTheme as usePaperTheme } from 'react-native-paper';
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { useAuth } from '../../../context/AuthContext';
@@ -8,6 +8,7 @@ import { AuthErrorType } from '../../../services/auth.service';
 
 export const SignUpScreen = ({ navigation }: { navigation: any }) => {
   const { theme } = useTheme();
+  const paperTheme = usePaperTheme();
   const { t } = useTranslation();
   const { signUp, error, loading, clearError } = useAuth();
   
@@ -117,123 +118,134 @@ export const SignUpScreen = ({ navigation }: { navigation: any }) => {
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
-    >
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <StatusBar backgroundColor={theme.colors.background} barStyle={theme.dark ? 'light-content' : 'dark-content'} />
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 64 : 0}
       >
-        <View style={styles.logoContainer}>
-          <Image 
-            source={require('../../../../assets/icon.png')} 
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={[styles.appTitle, { color: theme.colors.primary }]}>
-            {t('app.name')}
-          </Text>
-        </View>
-        
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <Text style={styles.title}>{t('auth.signUp')}</Text>
-            
-            <TextInput
-              label={t('auth.name')}
-              value={fullName}
-              onChangeText={(text) => {
-                setFullName(text);
-                setNameError('');
-              }}
-              mode="outlined"
-              style={styles.input}
-              error={!!nameError}
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.logoContainer}>
+            <Image 
+              source={require('./../../../assets/icon.png')} 
+              style={styles.logo}
+              resizeMode="contain"
             />
-            {nameError ? <Text style={styles.errorText}>{nameError}</Text> : null}
-            
-            <TextInput
-              label={t('auth.email')}
-              value={email}
-              onChangeText={(text) => {
-                setEmail(text);
-                setEmailError('');
-              }}
-              mode="outlined"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              style={styles.input}
-              error={!!emailError}
-            />
-            {emailError ? <Text style={styles.errorText}>{emailError}</Text> : null}
-            
-            <TextInput
-              label={t('auth.password')}
-              value={password}
-              onChangeText={(text) => {
-                setPassword(text);
-                setPasswordError('');
-              }}
-              mode="outlined"
-              secureTextEntry={!showPassword}
-              style={styles.input}
-              error={!!passwordError}
-              right={
-                <TextInput.Icon
-                  icon={showPassword ? 'eye-off' : 'eye'}
-                  onPress={() => setShowPassword(!showPassword)}
-                />
-              }
-            />
-            {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
-            
-            <TextInput
-              label={t('auth.confirmPassword')}
-              value={confirmPassword}
-              onChangeText={(text) => {
-                setConfirmPassword(text);
-                setConfirmPasswordError('');
-              }}
-              mode="outlined"
-              secureTextEntry={!showConfirmPassword}
-              style={styles.input}
-              error={!!confirmPasswordError}
-              right={
-                <TextInput.Icon
-                  icon={showConfirmPassword ? 'eye-off' : 'eye'}
-                  onPress={() => setShowConfirmPassword(!showConfirmPassword)}
-                />
-              }
-            />
-            {confirmPasswordError ? <Text style={styles.errorText}>{confirmPasswordError}</Text> : null}
-            
-            <Button
-              mode="contained"
-              onPress={handleSignUp}
-              disabled={loading}
-              style={styles.button}
-            >
-              {loading ? (
-                <ActivityIndicator color={theme.colors.onPrimary} size="small" />
-              ) : (
-                t('auth.signUp')
-              )}
-            </Button>
-            
-            <View style={styles.signInContainer}>
-              <Text>{t('auth.haveAccount')}</Text>
-              <TouchableOpacity onPress={navigateToSignIn}>
-                <Text style={{ color: theme.colors.primary, marginLeft: 5 }}>
-                  {t('auth.signIn')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </Card.Content>
-        </Card>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            <Text style={[styles.appTitle, { color: theme.colors.primary }]}>
+              {t('app.name')}
+            </Text>
+          </View>
+          
+          <Card style={[styles.card, { backgroundColor: theme.colors.surface }]} elevation={4}>
+            <Card.Content>
+              <Text style={[styles.title, { color: theme.colors.text }]}>{t('auth.signUp')}</Text>
+              
+              <TextInput
+                label={t('auth.name')}
+                value={fullName}
+                onChangeText={(text) => {
+                  setFullName(text);
+                  setNameError('');
+                }}
+                mode="outlined"
+                style={styles.input}
+                error={!!nameError}
+                theme={paperTheme}
+                
+              />
+              {nameError ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{nameError}</Text> : null}
+              
+              <TextInput
+                label={t('auth.email')}
+                value={email}
+                onChangeText={(text) => {
+                  setEmail(text);
+                  setEmailError('');
+                }}
+                mode="outlined"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                style={styles.input}
+                error={!!emailError}
+                theme={paperTheme}
+              />
+              {emailError ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{emailError}</Text> : null}
+              
+              <TextInput
+                label={t('auth.password')}
+                value={password}
+                onChangeText={(text) => {
+                  setPassword(text);
+                  setPasswordError('');
+                }}
+                mode="outlined"
+                secureTextEntry={!showPassword}
+                style={styles.input}
+                error={!!passwordError}
+                theme={paperTheme}
+                right={
+                  <TextInput.Icon
+                    icon={showPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowPassword(!showPassword)}
+                    color={theme.colors.primary}
+                  />
+                }
+              />
+              {passwordError ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{passwordError}</Text> : null}
+              
+              <TextInput
+                label={t('auth.confirmPassword')}
+                value={confirmPassword}
+                onChangeText={(text) => {
+                  setConfirmPassword(text);
+                  setConfirmPasswordError('');
+                }}
+                mode="outlined"
+                secureTextEntry={!showConfirmPassword}
+                style={styles.input}
+                error={!!confirmPasswordError}
+                theme={paperTheme}
+                right={
+                  <TextInput.Icon
+                    icon={showConfirmPassword ? 'eye-off' : 'eye'}
+                    onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+                    color={theme.colors.primary}
+                  />
+                }
+              />
+              {confirmPasswordError ? <Text style={[styles.errorText, { color: theme.colors.error }]}>{confirmPasswordError}</Text> : null}
+              
+              <Button
+                mode="contained"
+                onPress={handleSignUp}
+                disabled={loading}
+                style={[styles.button, { backgroundColor: loading ? theme.colors.disabled : theme.colors.primary }]}
+                labelStyle={{ color: theme.colors.onPrimary }}
+              >
+                {loading ? (
+                  <ActivityIndicator color={theme.colors.onPrimary} size="small" />
+                ) : (
+                  t('auth.signUp')
+                )}
+              </Button>
+              
+              <View style={styles.signInContainer}>
+                <Text style={{ color: theme.colors.text }}>{t('auth.haveAccount')}</Text>
+                <TouchableOpacity onPress={navigateToSignIn}>
+                  <Text style={{ color: theme.colors.primary, marginLeft: 5, fontWeight: 'bold' }}>
+                    {t('auth.signIn')}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </Card.Content>
+          </Card>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </View>
   );
 };
 
@@ -255,25 +267,28 @@ const styles = StyleSheet.create({
     height: 100,
   },
   appTitle: {
-    fontSize: 24,
+    fontSize: 28,
     fontWeight: 'bold',
     marginTop: 8,
   },
   card: {
-    borderRadius: 8,
+    borderRadius: 12,
     elevation: 4,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
   },
   title: {
-    fontSize: 24,
+    fontSize: 26,
     fontWeight: 'bold',
     marginBottom: 24,
     textAlign: 'center',
   },
   input: {
     marginBottom: 8,
+    backgroundColor: '#fff'
   },
   errorText: {
-    color: 'red',
     fontSize: 12,
     marginBottom: 8,
     marginTop: -4,
@@ -282,10 +297,12 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 16,
     paddingVertical: 8,
+    borderRadius: 8,
   },
   signInContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
     marginTop: 8,
+    padding: 8,
   },
 });
