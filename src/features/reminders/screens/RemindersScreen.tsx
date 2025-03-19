@@ -11,6 +11,8 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import * as Notifications from "expo-notifications";
+import { notificationService } from "../../../services/notificationService";
+import { reminderService } from "../../../services/reminderService";
 import {
   Card,
   TextInput,
@@ -330,57 +332,22 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
   useEffect(() => {
     const initializeApp = async () => {
+      console.log("Initializing reminders");
       await loadReminders();
       await setupNotifications();
     };
     initializeApp();
   }, []);
 
-  useEffect(() => {
-    const migrateAndLoadReminders = async () => {
-      try {
-        // First try to get reminders from old key
-        const oldReminders = await AsyncStorage.getItem("reminders");
-        console.log("Old reminders found:", oldReminders);
-
-        if (oldReminders) {
-          // Save to new key
-          await AsyncStorage.setItem(STORAGE_KEYS.REMINDERS, oldReminders);
-          console.log("Migrated reminders to new key:", STORAGE_KEYS.REMINDERS);
-
-          // Set reminders in state
-          setReminders(JSON.parse(oldReminders));
-
-          // Clean up old key
-          await AsyncStorage.removeItem("reminders");
-        } else {
-          // Try loading from new key if no old reminders exist
-          const savedReminders = await AsyncStorage.getItem(
-            STORAGE_KEYS.REMINDERS
-          );
-          console.log("Loading from new key:", savedReminders);
-
-          if (savedReminders) {
-            setReminders(JSON.parse(savedReminders));
-          }
-        }
-      } catch (error) {
-        console.error("Error in migrate and load:", error);
-      }
-    };
-
-    migrateAndLoadReminders();
-  }, []);
-
   const loadReminders = async () => {
     try {
-      const savedReminders = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
-      console.log("Loading saved reminders:", savedReminders);
-      if (savedReminders) {
-        setReminders(JSON.parse(savedReminders));
-      }
+      console.log("Loading reminders using reminderService");
+      const loadedReminders = await reminderService.getReminders();
+      console.log("Loaded reminders count:", loadedReminders.length);
+      setReminders(loadedReminders);
     } catch (error) {
       console.error("Error loading reminders:", error);
+      setReminders([]);
     }
   };
 
@@ -406,6 +373,16 @@ const RemindersScreen: React.FC = (): ReactElement => {
     }
   };
 
+  const testNotifications = async () => {
+    try {
+      await notificationService.testNotification();
+      Alert.alert('Test Notification Sent', 'You should receive a notification in a few seconds');
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      Alert.alert('Error', 'Failed to send test notification');
+    }
+  };
+
   const handleAddReminder = async () => {
     if (!medicineName.trim()) {
       Alert.alert(t("reminders.error"), t("reminders.medicineNameRequired"));
@@ -413,8 +390,11 @@ const RemindersScreen: React.FC = (): ReactElement => {
     }
 
     try {
+      // Generate a unique ID with timestamp and random string
+      const uniqueId = `${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
+      
       const newReminder: Reminder = {
-        id: Date.now().toString(),
+        id: uniqueId,
         medicineName,
         dosage: dosage.toString(),
         doseType,
@@ -445,19 +425,24 @@ const RemindersScreen: React.FC = (): ReactElement => {
         notifications: [],
       };
 
-      const updatedReminders = [...reminders, newReminder];
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.REMINDERS,
-        JSON.stringify(updatedReminders)
-      );
-      console.log("Saved reminder:", newReminder);
-      console.log(
-        "Updated reminders in storage:",
-        JSON.stringify(updatedReminders)
-      );
-
-      setReminders(updatedReminders);
+      console.log("Adding new reminder with ID:", uniqueId);
+      
+      // Save using our reminderService
+      const saveSuccess = await reminderService.saveReminder(newReminder);
+      
+      if (!saveSuccess) {
+        throw new Error("Failed to save reminder");
+      }
+      
+      console.log("Saved reminder successfully");
+      
+      // Reload the reminders to get the updated list
+      await loadReminders();
+      
+      // Schedule notifications
       await scheduleNotifications(newReminder);
+      
+      // Reset the form
       setShowAddForm(false);
       resetForm();
     } catch (error) {
@@ -468,32 +453,154 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
   const scheduleNotifications = async (reminder: Reminder) => {
     try {
-      for (const timeStr of reminder.times) {
-        const time = new Date(timeStr);
-        const trigger: NotificationTrigger = {
-          hour: time.getHours(),
-          minute: time.getMinutes(),
-          repeats: true,
-        };
+      console.log("Starting to schedule notifications for reminder:", reminder.medicineName);
+      
+      // First, cancel any existing notifications for this reminder if it's being edited
+      if (reminder.notifications && reminder.notifications.length > 0) {
+        console.log(`Canceling ${reminder.notifications.length} existing notifications`);
+        for (const notification of reminder.notifications) {
+          await notificationService.cancelNotification(notification.id);
+        }
+      }
 
-        const content: NotificationContent = {
+      // Make sure we have notification permissions
+      const { status } = await notificationService.requestPermissions();
+      if (status !== 'granted') {
+        Alert.alert(
+          t("reminders.error"),
+          t("reminders.notificationPermissionRequired")
+        );
+        return;
+      }
+      
+      // Create an array to store new notification IDs
+      const newNotifications: ReminderNotification[] = [];
+
+      for (const timeStr of reminder.times) {
+        const [hours, minutes] = timeStr.split(':').map(Number);
+        
+        console.log(`Processing time: ${timeStr} (${hours}:${minutes})`);
+        
+        // Create the notification content with a proper title and description
+        const content = {
           title: t("reminders.notificationTitle", {
             medicineName: reminder.medicineName,
           }),
           body: t("reminders.notificationBody", {
             dosage: reminder.dosage,
-            doseType: reminder.doseType,
-            time: new Date(timeStr).toLocaleTimeString(),
+            doseType: t(`reminders.doseTypes.${reminder.doseType}`),
+            time: timeStr,
           }),
-          data: { reminderId: reminder.id },
-          sound: "default",
+          sound: reminder.notificationSettings.sound === 'default' ? 'default' : false, 
+          data: { 
+            reminderId: reminder.id,
+            type: 'reminder',
+            medicineName: reminder.medicineName,
+            dosage: reminder.dosage,
+            doseType: reminder.doseType,
+            time: timeStr
+          },
         };
 
-        await Notifications.scheduleNotificationAsync({
-          content,
-          trigger: { seconds: 1 },
+        // Schedule the notification to occur at the specified time using the service
+        let notificationId;
+        try {
+          console.log(`Scheduling daily notification for ${hours}:${minutes}`);
+          
+          // Create a proper trigger for daily notifications
+          const trigger = { 
+            hour: hours, 
+            minute: minutes, 
+            repeats: true 
+          };
+          
+          notificationId = await notificationService.scheduleNotification(content, trigger);
+          console.log(`Successfully scheduled notification for ${reminder.medicineName} at ${timeStr} with ID: ${notificationId}`);
+        } catch (err) {
+          console.error(`Error scheduling notification for ${timeStr}:`, err);
+          notificationId = `manual-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
+        }
+
+        // Store the notification information
+        newNotifications.push({
+          id: notificationId,
+          reminderId: reminder.id,
+          scheduledTime: timeStr,
+          status: 'pending',
         });
       }
+
+      // Also create an immediate test notification to confirm setup
+      try {
+        console.log('Scheduling test notification');
+        const testContent = {
+          title: t("reminders.reminderSetTitle") || "Reminder Set",
+          body: t("reminders.reminderSetBody", { 
+            medicineName: reminder.medicineName,
+            time: reminder.times[0] 
+          }) || `Your ${reminder.medicineName} reminder is set for ${reminder.times[0]}`,
+          sound: 'default',
+          data: { 
+            type: 'test',
+            reminderId: reminder.id
+          }
+        };
+
+        // Schedule immediate notification with a 5-second delay
+        await notificationService.scheduleNotification(
+          testContent, 
+          { seconds: 5 }
+        );
+        console.log(`Successfully scheduled test notification for ${reminder.medicineName}`);
+      } catch (err) {
+        console.error('Error scheduling test notification:', err);
+        // Continue even if test notification fails
+      }
+
+      // Find the reminder in the state
+      const reminderIndex = reminders.findIndex(r => r.id === reminder.id);
+      
+      if (reminderIndex >= 0) {
+        // Update existing reminder with new notifications
+        const updatedReminder = {
+          ...reminders[reminderIndex],
+          notifications: newNotifications // Replace all notifications
+        };
+        
+        // Create updated reminders array
+        const updatedReminders = [...reminders];
+        updatedReminders[reminderIndex] = updatedReminder;
+        
+        console.log(`Saving updated reminder with ${newNotifications.length} notifications`);
+        
+        // Save using our reminderService
+        const saveResult = await reminderService.saveReminder(updatedReminder);
+        if (!saveResult) {
+          console.error('Failed to save reminder with new notifications');
+        }
+        
+        // Update state
+        setReminders(updatedReminders);
+      } else {
+        // It's a new reminder, add notifications and update
+        const updatedReminder = {
+          ...reminder,
+          notifications: newNotifications
+        };
+        
+        console.log(`Saving new reminder with ${newNotifications.length} notifications`);
+        
+        // Save the updated reminder
+        const saveResult = await reminderService.saveReminder(updatedReminder);
+        if (!saveResult) {
+          console.error('Failed to save new reminder with notifications');
+        }
+        
+        // Reload reminders to get the updated list
+        await loadReminders();
+      }
+      
+      console.log(`Scheduled ${newNotifications.length} notifications for reminder: ${reminder.medicineName}`);
     } catch (error) {
       console.error("Error scheduling notifications:", error);
       Alert.alert(
@@ -563,15 +670,12 @@ const RemindersScreen: React.FC = (): ReactElement => {
         doses: [...reminder.doses, newDose],
       };
 
-      const updatedReminders = reminders.map((r) =>
-        r.id === reminder.id ? updatedReminder : r
-      );
-
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.REMINDERS,
-        JSON.stringify(updatedReminders)
-      );
-      setReminders(updatedReminders);
+      // Save the updated reminder
+      await reminderService.saveReminder(updatedReminder);
+      
+      // Reload the reminders to get the updated list
+      await loadReminders();
+      
       setShowStatusModal(false);
       setSelectedReminder(null);
 
@@ -640,10 +744,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
         },
       });
 
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.REMINDERS,
-        JSON.stringify(updatedReminders)
-      );
+      await reminderService.saveReminders(updatedReminders);
       setReminders(updatedReminders);
       setShowSnoozeModal(false);
       setSelectedNotification(null);
@@ -666,10 +767,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           ? { ...reminder, notificationSettings: settings }
           : reminder
       );
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.REMINDERS,
-        JSON.stringify(updatedReminders)
-      );
+      await reminderService.saveReminders(updatedReminders);
       setReminders(updatedReminders);
     } catch (error) {
       console.error("Error updating notification settings:", error);
@@ -730,17 +828,16 @@ const RemindersScreen: React.FC = (): ReactElement => {
       const reminderToDelete = reminders.find((r) => r.id === reminderId);
       if (reminderToDelete?.notifications) {
         for (const notification of reminderToDelete.notifications) {
-          await Notifications.cancelScheduledNotificationAsync(notification.id);
+          await notificationService.cancelNotification(notification.id);
         }
       }
 
-      // Remove from storage and state
-      const updatedReminders = reminders.filter((r) => r.id !== reminderId);
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.REMINDERS,
-        JSON.stringify(updatedReminders)
-      );
-      setReminders(updatedReminders);
+      // Delete from storage
+      await reminderService.deleteReminder(reminderId);
+      
+      // Reload the reminders to get the updated list
+      await loadReminders();
+      
       Alert.alert(t("reminders.deleted"), t("reminders.reminderDeleted"));
     } catch (error) {
       console.error("Error deleting reminder:", error);
@@ -787,28 +884,18 @@ const RemindersScreen: React.FC = (): ReactElement => {
           isEditing && editingReminder ? editingReminder.notifications : [],
       };
 
-      let updatedReminders: Reminder[];
-      if (isEditing && editingReminder) {
-        // Cancel existing notifications before updating
-        if (editingReminder.notifications) {
-          for (const notification of editingReminder.notifications) {
-            await Notifications.cancelScheduledNotificationAsync(
-              notification.id
-            );
-          }
+      // Cancel existing notifications before updating
+      if (isEditing && editingReminder && editingReminder.notifications) {
+        for (const notification of editingReminder.notifications) {
+          await notificationService.cancelNotification(notification.id);
         }
-        updatedReminders = reminders.map((r) =>
-          r.id === editingReminder.id ? reminderData : r
-        );
-      } else {
-        updatedReminders = [...reminders, reminderData];
       }
-
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.REMINDERS,
-        JSON.stringify(updatedReminders)
-      );
-      setReminders(updatedReminders);
+      
+      // Save the reminder
+      await reminderService.saveReminder(reminderData);
+      
+      // Reload the reminders to get the updated list
+      await loadReminders();
 
       // Schedule new notifications
       await scheduleNotifications(reminderData);
@@ -1265,9 +1352,20 @@ const RemindersScreen: React.FC = (): ReactElement => {
               />
             ))
           ) : (
-            <Text style={[styles.noReminders, { color: theme.colors.text }]}>
-              {t("reminders.noReminders")}
-            </Text>
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons 
+                name="pill" 
+                size={64} 
+                color={theme.colors.primary} 
+                style={styles.emptyIcon}
+              />
+              <Text style={[styles.noReminders, { color: theme.colors.text }]}>
+                {t("reminders.noReminders")}
+              </Text>
+              <Text style={[styles.emptySubtext, { color: theme.colors.textSecondary }]}>
+                {t("reminders.tapPlusToAdd")}
+              </Text>
+            </View>
           )}
         </ScrollView>
       )}
@@ -1279,6 +1377,24 @@ const RemindersScreen: React.FC = (): ReactElement => {
           styles.fab,
           {
             backgroundColor: theme.colors.primary,
+            shadowColor:
+              theme.colors?.elevation?.level3 || "rgba(0, 0, 0, 0.15)",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4.65,
+            elevation: 6,
+          },
+        ]}
+        color={theme.colors.surface}
+      />
+
+      <FAB
+        icon="bell-ring"
+        onPress={testNotifications}
+        style={[
+          styles.testFab,
+          {
+            backgroundColor: theme.colors.secondary || theme.colors.primary,
             shadowColor:
               theme.colors?.elevation?.level3 || "rgba(0, 0, 0, 0.15)",
             shadowOffset: { width: 0, height: 4 },
@@ -1456,6 +1572,13 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 0,
+    elevation: 2,
+  },
+  testFab: {
+    position: "absolute",
+    margin: 16,
+    right: 0,
+    bottom: 80, // Position above the main FAB
     elevation: 2,
   },
   scrollView: {
@@ -1716,6 +1839,17 @@ const styles = StyleSheet.create({
   },
   statusIcon: {
     marginRight: 4,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  emptyIcon: {
+    marginBottom: 16,
+  },
+  emptySubtext: {
+    textAlign: "center",
   },
 });
 

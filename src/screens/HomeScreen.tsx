@@ -12,6 +12,8 @@ import { RootStackParamList } from '../navigation/types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../utils/constants';
 import { Reminder, ReminderStatus } from '../features/reminders/types/reminder.types';
+import { getReminders } from '../utils/storageHelper';
+import { reminderService } from '../services/reminderService';
 
 // Add this type at the top with other interfaces
 type IconName = keyof typeof MaterialCommunityIcons.glyphMap;
@@ -51,9 +53,11 @@ interface HealthTip {
 
 type TabParamList = {
   Home: undefined;
-  Reminders: undefined;
+  Reminder: undefined;
   Health: undefined;
   SOS: undefined;
+  Feed: undefined;
+  Settings: undefined;
   MedicineIdentifier: undefined;
 };
 
@@ -93,69 +97,68 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
 
   const loadUpcomingReminders = async () => {
     try {
-      let savedReminders = await AsyncStorage.getItem(STORAGE_KEYS.REMINDERS);
-      console.log('Loading reminders:', savedReminders);
+      const allReminders = await reminderService.getReminders();
+      console.log('Loaded reminders count:', allReminders.length);
       
-      if (savedReminders) {
-        const allReminders: Reminder[] = JSON.parse(savedReminders);
-        
-        const now = new Date();
-        const currentHours = now.getHours();
-        const currentMinutes = now.getMinutes();
-        const currentTimeInMinutes = currentHours * 60 + currentMinutes;
-
-        // Transform reminders to include next upcoming time
-        const remindersWithNextTime = allReminders
-          .filter(reminder => reminder.isActive)
-          .map(reminder => {
-            if (!reminder.times || reminder.times.length === 0) {
-              console.log('Filtering out reminder:', reminder.medicineName, 'due to no times');
-              return null;
-            }
-
-            // Convert all times to minutes and find the next upcoming one
-            const timeInMinutes = reminder.times.map(time => {
-              const [hours, minutes] = time.split(':');
-              return parseInt(hours) * 60 + parseInt(minutes);
-            });
-
-            // Find the next upcoming time
-            const nextTime = timeInMinutes.find(time => time > currentTimeInMinutes);
-            
-            if (nextTime) {
-              console.log('Reminder:', reminder.medicineName, 'next time:', 
-                `${Math.floor(nextTime/60)}:${String(nextTime%60).padStart(2, '0')}`, 
-                'isUpcoming: true');
-              
-              return {
-                ...reminder,
-                nextTimeInMinutes: nextTime,
-                nextTimeString: reminder.times[timeInMinutes.indexOf(nextTime)]
-              };
-            }
-            
-            console.log('Reminder:', reminder.medicineName, 'has no upcoming times today');
-            return null;
-          })
-          .filter((reminder): reminder is (Reminder & { 
-            nextTimeInMinutes: number, 
-            nextTimeString: string 
-          }) => reminder !== null)
-          .sort((a, b) => a.nextTimeInMinutes - b.nextTimeInMinutes)
-          .slice(0, 3);
-
-        console.log('Filtered upcoming reminders:', remindersWithNextTime);
-        
-        // Transform back to regular reminder format but use the next upcoming time
-        const upcoming = remindersWithNextTime.map(reminder => ({
-          ...reminder,
-          times: [reminder.nextTimeString] // Use the next upcoming time for display
-        }));
-
-        setUpcomingReminders(upcoming);
-      } else {
-        console.log('No reminders found in storage');
+      if (allReminders.length === 0) {
+        setUpcomingReminders([]);
+        return;
       }
+      
+      const now = new Date();
+      const currentHours = now.getHours();
+      const currentMinutes = now.getMinutes();
+      const currentTimeInMinutes = currentHours * 60 + currentMinutes;
+
+      // Transform reminders to include next upcoming time
+      const remindersWithNextTime = allReminders
+        .filter(reminder => reminder.isActive)
+        .map(reminder => {
+          if (!reminder.times || reminder.times.length === 0) {
+            console.log('Filtering out reminder:', reminder.medicineName, 'due to no times');
+            return null;
+          }
+
+          // Convert all times to minutes and find the next upcoming one
+          const timeInMinutes = reminder.times.map(time => {
+            const [hours, minutes] = time.split(':');
+            return parseInt(hours) * 60 + parseInt(minutes);
+          });
+
+          // Find the next upcoming time
+          const nextTime = timeInMinutes.find(time => time > currentTimeInMinutes);
+          
+          if (nextTime) {
+            console.log('Reminder:', reminder.medicineName, 'next time:', 
+              `${Math.floor(nextTime/60)}:${String(nextTime%60).padStart(2, '0')}`, 
+              'isUpcoming: true');
+            
+            return {
+              ...reminder,
+              nextTimeInMinutes: nextTime,
+              nextTimeString: reminder.times[timeInMinutes.indexOf(nextTime)]
+            };
+          }
+          
+          console.log('Reminder:', reminder.medicineName, 'has no upcoming times today');
+          return null;
+        })
+        .filter((reminder): reminder is (Reminder & { 
+          nextTimeInMinutes: number, 
+          nextTimeString: string 
+        }) => reminder !== null)
+        .sort((a, b) => a.nextTimeInMinutes - b.nextTimeInMinutes)
+        .slice(0, 3);
+
+      console.log('Filtered upcoming reminders:', remindersWithNextTime);
+      
+      // Transform back to regular reminder format but use the next upcoming time
+      const upcoming = remindersWithNextTime.map(reminder => ({
+        ...reminder,
+        times: [reminder.nextTimeString] // Use the next upcoming time for display
+      }));
+
+      setUpcomingReminders(upcoming);
     } catch (error) {
       console.error('Error loading reminders:', error);
     }
@@ -260,7 +263,7 @@ const HomeScreen = ({ navigation }: { navigation: BottomTabNavigationProp<TabPar
           <QuickActionButton
             icon="pill"
             title="Add Reminder"
-            onPress={() => navigation.jumpTo('Reminders')}
+            onPress={() => navigation.jumpTo('Reminder')}
           />
           <QuickActionButton
             icon="heart"

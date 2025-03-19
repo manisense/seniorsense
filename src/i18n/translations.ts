@@ -89,6 +89,7 @@ export default {
         missed: '{medicine} marked as missed'
       },
       noReminders: 'No reminders set',
+      tapPlusToAdd: 'Tap the + button to add a reminder',
       errorAddingReminder: 'Error adding reminder',
       errorUpdatingStatus: 'Error updating status',
       errorSchedulingNotifications: 'Error scheduling notifications',
@@ -625,6 +626,7 @@ export default {
         missed: '{medicine} को याद नहीं रखा'
       },
       noReminders: 'कोई रिमाइंडर नहीं',
+      tapPlusToAdd: 'रिमाइंडर जोड़ने के लिए + बटन पर टैप करें',
       errorAddingReminder: 'रिमाइंडर जोड़ने में त्रुटि',
       errorUpdatingStatus: 'स्थिति अपडेट करने में त्रुटि',
       errorSchedulingNotifications: 'सूचनाएं शेड्यूल करने में त्रुटि',

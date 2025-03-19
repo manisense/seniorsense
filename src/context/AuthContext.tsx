@@ -4,6 +4,7 @@ import { authService, AuthServiceError, AuthErrorType } from '../services/auth.s
 import supabase from '../services/auth.service';
 import { Alert } from 'react-native';
 import { useTranslation } from '../hooks/useTranslation';
+import { reminderService } from '../services/reminderService';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -117,33 +118,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signIn = async (email: string, password: string): Promise<boolean> => {
     try {
-      setLoading(true);
       clearError();
+      setLoading(true);
       
-      const { session: newSession, error: signInError } = await authService.signIn(email, password);
+      const { session, error } = await authService.signIn(email, password);
       
-      if (signInError) {
-        return handleError(signInError);
+      if (error) {
+        handleError(error);
+        return false;
       }
-      
-      if (newSession) {
-        setSession(newSession);
-        setUser(newSession.user);
+
+      if (session) {
+        setUser(session.user);
+        setSession(session);
         setIsAuthenticated(true);
-        return true;
+        
+        // Sync local reminders to Supabase
+        await reminderService.syncReminders();
       }
       
+      return true;
+    } catch (error) {
+      console.error('Error signing in:', error);
+      setError(new AuthServiceError('An unexpected error occurred', AuthErrorType.UNKNOWN_ERROR, error));
       return false;
-    } catch (err) {
-      console.error('Error in signIn:', err);
-      const authError = err instanceof AuthServiceError 
-        ? err 
-        : new AuthServiceError(
-            'An unexpected error occurred during sign in',
-            AuthErrorType.UNKNOWN_ERROR,
-            err
-          );
-      return handleError(authError);
     } finally {
       setLoading(false);
     }
@@ -151,33 +149,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signUp = async (email: string, password: string, fullName: string): Promise<boolean> => {
     try {
-      setLoading(true);
       clearError();
+      setLoading(true);
       
-      const { user: newUser, error: signUpError } = await authService.signUp(
-        email, 
-        password, 
-        { full_name: fullName }
-      );
+      const { error } = await authService.signUp(email, password, { full_name: fullName });
       
-      if (signUpError) {
-        return handleError(signUpError);
+      if (error) {
+        handleError(error);
+        return false;
       }
       
-      // Note: User needs to confirm email before they can sign in
-      // We don't set isAuthenticated here
+      // Sync local reminders to Supabase
+      await reminderService.syncReminders();
       
       return true;
-    } catch (err) {
-      console.error('Error in signUp:', err);
-      const authError = err instanceof AuthServiceError 
-        ? err 
-        : new AuthServiceError(
-            'An unexpected error occurred during sign up',
-            AuthErrorType.UNKNOWN_ERROR,
-            err
-          );
-      return handleError(authError);
+    } catch (error) {
+      console.error('Error signing up:', error);
+      setError(new AuthServiceError('An unexpected error occurred', AuthErrorType.UNKNOWN_ERROR, error));
+      return false;
     } finally {
       setLoading(false);
     }
@@ -216,24 +205,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const signInWithGoogle = async (): Promise<void> => {
     try {
-      setLoading(true);
       clearError();
+      setLoading(true);
       
       await authService.signInWithGoogle();
       
-      // Note: The auth state change listener will handle updating the state
-      // when the OAuth flow completes
-    } catch (err) {
-      console.error('Error in signInWithGoogle:', err);
-      const authError = err instanceof AuthServiceError 
-        ? err 
-        : new AuthServiceError(
-            'An unexpected error occurred during Google sign in',
-            AuthErrorType.OAUTH_ERROR,
-            err
-          );
-      handleError(authError);
-      throw authError; // Re-throw to allow handling in UI
+      // Get the current session after OAuth login
+      const { session, error } = await authService.getSession();
+      
+      if (error) {
+        handleError(error);
+        return;
+      }
+      
+      if (session) {
+        setUser(session.user);
+        setSession(session);
+        setIsAuthenticated(true);
+        
+        // Sync local reminders to Supabase
+        await reminderService.syncReminders();
+      }
+    } catch (error) {
+      console.error('Error signing in with Google:', error);
+      setError(new AuthServiceError('An unexpected error occurred', AuthErrorType.UNKNOWN_ERROR, error));
     } finally {
       setLoading(false);
     }

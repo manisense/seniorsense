@@ -1,12 +1,13 @@
 export const STORAGE_KEYS = {
-  LANGUAGE: 'settings_language',
-  THEME: 'settings_theme',
+  LANGUAGE: 'language',
+  THEME: 'theme',
   USER_PROFILE: 'user_profile',
-  FONT_SIZE: 'settings_font_size',
-  NOTIFICATIONS: 'settings_notifications',
-  PROFILE: 'user_profile',
-  REMINDERS: 'user_reminders',
-  EMERGENCY_CONTACTS: 'emergency_contacts'
+  FONT_SIZE: 'font_size',
+  NOTIFICATIONS: 'notifications',
+  PROFILE: 'profile',
+  REMINDERS: 'reminders',
+  EMERGENCY_CONTACTS: 'emergency_contacts',
+  NOTIFICATION_IDS: 'notification_ids',
 }; 
 
 export const MAX_CONTACTS = 5;
