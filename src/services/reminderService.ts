@@ -13,7 +13,6 @@ import {
 } from './syncQueueService';
 import { storageService } from './storage/storage.service';
 import { Session } from '@supabase/supabase-js';
-import { useAuth } from '../context/AuthContext';
 
 // Constants for storage keys from auth.service.ts
 const SESSION_STORAGE_KEY = 'supabase.auth.session';
@@ -29,6 +28,27 @@ let authContextInstance: any = null;
 export const setAuthContextInstance = (instance: any) => {
   authContextInstance = instance;
 };
+
+/**
+ * Validates if a string is a valid UUID
+ */
+function isValidUUID(str: string): boolean {
+  // UUID v4 regex pattern
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidPattern.test(str);
+}
+
+/**
+ * Generates a new UUID v4
+ */
+function generateUUID(): string {
+  // Simple UUID v4 generation function
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
 
 /**
  * Helper to safely parse JSON fields from Supabase
@@ -336,33 +356,34 @@ export const reminderService = {
       
       // Convert app format to Supabase format
       const reminderData = {
-        id: reminder.id,
+        id: isValidUUID(reminder.id) ? reminder.id : generateUUID(),
         user_id: finalUser.id,
         medicine_name: reminder.medicineName,
         dosage: reminder.dosage || '',
         dose_type: reminder.doseType || '',
-        illness_type: reminder.illnessType || '', // Ensure we have a value, even if empty string
+        illness_type: reminder.illnessType || '',
         frequency: safeStringifyJson(reminder.frequency || { type: 'daily' }),
         start_date: reminder.startDate || now,
         end_date: reminder.endDate || now,
         times: safeStringifyJson(reminder.times || []),
         is_active: reminder.isActive !== undefined ? reminder.isActive : true,
-        notification_settings: safeStringifyJson(reminder.notificationSettings || {
-          sound: 'default',
-          vibration: true,
-          snoozeEnabled: false,
-          defaultSnoozeTime: 10
+        notification_settings: safeStringifyJson(reminder.notificationSettings || { 
+          sound: 'default', 
+          vibration: true, 
+          snoozeEnabled: false, 
+          defaultSnoozeTime: 10 
         }),
         doses: safeStringifyJson(reminder.doses || []),
         notifications: safeStringifyJson(reminder.notifications || []),
-        created_at: reminder.created_at || now, // Use existing timestamp or create new one
-        updated_at: now  // Always update the timestamp
+        created_at: reminder.created_at || now,  // Use existing timestamp if available
+        updated_at: now  // Always update the updated_at timestamp
       };
       
       console.log('Converted reminder to Supabase format');
       console.log('Reminder data structure:', Object.keys(reminderData).join(', '));
+      console.log('Using ID format:', reminderData.id);
       
-      // Upsert the reminder (insert if not exists, update if exists)
+      // Save to Supabase
       const { error } = await supabase
         .from('reminders')
         .upsert(reminderData, { onConflict: 'id' });
@@ -675,7 +696,7 @@ async function syncLocalRemindersToSupabase(localReminders: Reminder[], userId: 
     
     // Convert app format to Supabase format
     const reminderData = localReminders.map(reminder => ({
-      id: reminder.id,
+      id: isValidUUID(reminder.id) ? reminder.id : generateUUID(),
       user_id: userId,
       medicine_name: reminder.medicineName,
       dosage: reminder.dosage || '',
@@ -1012,7 +1033,7 @@ async function saveReminderToSupabase(reminder: Reminder): Promise<boolean> {
     
     // Convert app format to Supabase format
     const reminderData = {
-      id: reminder.id,
+      id: isValidUUID(reminder.id) ? reminder.id : generateUUID(),
       user_id: finalUser.id,
       medicine_name: reminder.medicineName,
       dosage: reminder.dosage || '',
@@ -1037,6 +1058,7 @@ async function saveReminderToSupabase(reminder: Reminder): Promise<boolean> {
     
     // Log data being sent to Supabase
     console.log('Saving reminder with data structure:', Object.keys(reminderData).join(', '));
+    console.log('Using ID format:', reminderData.id);
     
     // Save to Supabase
     const { error } = await supabase
