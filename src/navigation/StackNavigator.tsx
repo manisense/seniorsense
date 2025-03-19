@@ -4,19 +4,14 @@ import SettingsScreen from '../screens/SettingsScreen';
 import MedicineIdentifierScreen from '../features/medicine/screens/MedicineIdentifierScreen';
 import MedicineHistoryScreen from '../features/medicine/screens/MedicineHistoryScreen';
 import MedicineHistoryDetailScreen from '../features/medicine/screens/MedicineHistoryDetailScreen';
+import { ProfileScreen } from '../features/profile/screens/ProfileScreen';
 import { useTranslation } from '../hooks/useTranslation';
 import { useTheme } from '../context/ThemeContext';
 import { useAuth } from '../context/AuthContext';
 import { AuthStack } from './AuthStack';
 import TabNavigator from './TabNavigator';
-
-export type RootStackParamList = {
-  MainTabs: undefined;
-  Settings: undefined;
-  MedicineIdentifier: undefined;
-  MedicineHistory: undefined;
-  MedicineHistoryDetail: { id: string };
-};
+import { RootStackParamList } from './types';
+import FeedDetailScreen from '../screens/FeedDetailScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -49,6 +44,11 @@ export const StackNavigator = () => {
             options={{ headerShown: false }}
           />
           <Stack.Screen
+            name="Profile"
+            component={ProfileScreen}
+            options={{ title: t('profile.title') }}
+          />
+          <Stack.Screen
             name="Settings"
             component={SettingsScreen}
             options={{ title: t('navigation.settings') }}
@@ -67,6 +67,11 @@ export const StackNavigator = () => {
             name="MedicineHistoryDetail"
             component={MedicineHistoryDetailScreen}
             options={{ title: t('medicineIdentifier.historyDetail') }}
+          />
+          <Stack.Screen
+            name="FeedDetail"
+            component={FeedDetailScreen}
+            options={({ route }) => ({ title: route.params.item.title })}
           />
         </Stack.Navigator>
       ) : (

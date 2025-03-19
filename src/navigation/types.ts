@@ -3,6 +3,9 @@ export type RootStackParamList = {
   Profile: undefined;
   Settings: undefined;
   FeedDetail: { item: any };
+  MedicineIdentifier: undefined;
+  MedicineHistory: undefined;
+  MedicineHistoryDetail: { id: string };
 };
 
 export type TabParamList = {

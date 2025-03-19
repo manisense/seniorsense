@@ -13,14 +13,9 @@ import RemindersScreen from '@/features/reminders/screens/RemindersScreen';
 import SOSScreen from '@/features/emergency/screens/SOSScreen';
 import { useTheme } from '../context/ThemeContext';
 import { useEffect, useState } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { STORAGE_KEYS, DEFAULT_PROFILE, ProfileType } from '../features/profile/constants';
-import { TabParamList } from './types';
-
-type RootStackParamList = {
-  Main: undefined;
-  Profile: undefined;
-};
+import { TabParamList, RootStackParamList } from './types';
+import { useAuth } from '@/context/AuthContext';
+import { profileService, ProfileData } from '@/services/profileService';
 
 type NavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<TabParamList>,
@@ -32,23 +27,40 @@ const Tab = createBottomTabNavigator<TabParamList>();
 export const Header = () => {
   const navigation = useNavigation<NavigationProp>();
   const { theme } = useTheme();
-  const [profile, setProfile] = useState<ProfileType>(DEFAULT_PROFILE);
+  const { user } = useAuth();
+  const [profile, setProfile] = useState<ProfileData | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     loadProfile();
-  }, []);
+  }, [user]);
 
   const loadProfile = async () => {
+    if (!user) {
+      setProfile(null);
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const savedProfile = await AsyncStorage.getItem(STORAGE_KEYS.PROFILE);
-      if (savedProfile) {
-        const parsedProfile = JSON.parse(savedProfile);
-        setProfile(parsedProfile);
+      const { data, error } = await profileService.getProfile();
+      if (error) {
+        console.error('Error loading profile in Header:', error);
+      }
+      
+      if (data) {
+        setProfile(data);
       }
     } catch (error) {
-      console.error('Error loading profile:', error);
+      console.error('Error in loadProfile (Header):', error);
+    } finally {
+      setIsLoading(false);
     }
   };
+
+  const displayName = isLoading 
+    ? 'Loading...' 
+    : profile?.full_name || user?.email?.split('@')[0] || 'Guest';
 
   return (
     <SafeAreaView style={[
@@ -67,7 +79,7 @@ export const Header = () => {
               styles.userName, 
               { color: theme?.colors?.text || '#000000' }
             ]}>
-              {profile?.name || 'User'}
+              {displayName}
             </Text>
           </View>
         </TouchableRipple>

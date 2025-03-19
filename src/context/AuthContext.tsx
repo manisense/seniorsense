@@ -5,6 +5,7 @@ import supabase from '../services/auth.service';
 import { Alert } from 'react-native';
 import { useTranslation } from '../hooks/useTranslation';
 import { reminderService } from '../services/reminderService';
+import { profileService } from '../services/profileService';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -52,46 +53,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       try {
         setLoading(true);
         
-        // Check for existing session
-        const { session: currentSession, error: sessionError } = await authService.getSession();
+        const { session, error } = await authService.getSession();
         
-        if (sessionError) {
-          console.warn('Session error:', sessionError);
-          // Don't set error here as it's just initialization
+        if (error) {
+          console.error('Error getting session:', error);
+          return;
         }
         
-        if (currentSession) {
-          setSession(currentSession);
-          setUser(currentSession.user);
+        if (session) {
+          setUser(session.user);
+          setSession(session);
           setIsAuthenticated(true);
+          
+          // Ensure profile exists for the user
+          if (session.user) {
+            await profileService.ensureProfile(session.user);
+          }
         }
-      } catch (err) {
-        console.error('Error initializing auth:', err);
+      } catch (error) {
+        console.error('Error in initializeAuth:', error);
       } finally {
         setLoading(false);
       }
     };
 
     initializeAuth();
-
-    // Set up auth state change listener
-    const { data: authListener } = authService.onAuthStateChange(async (event, session) => {
-      console.log(`Auth event: ${event}`);
-      
-      if (session) {
+    
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event);
+        setUser(session?.user ?? null);
         setSession(session);
-        setUser(session.user);
-        setIsAuthenticated(true);
-      } else {
-        setSession(null);
-        setUser(null);
-        setIsAuthenticated(false);
+        setIsAuthenticated(!!session);
+        
+        if (session?.user) {
+          // Create or get profile when user logs in
+          await profileService.ensureProfile(session.user);
+        }
       }
-    });
+    );
 
-    // Clean up subscription
     return () => {
-      authListener?.subscription.unsubscribe();
+      authListener.subscription.unsubscribe();
     };
   }, []);
 
@@ -133,6 +137,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setSession(session);
         setIsAuthenticated(true);
         
+        // Ensure profile exists
+        if (session.user) {
+          await profileService.ensureProfile(session.user);
+        }
+        
         // Sync local reminders to Supabase
         await reminderService.syncReminders();
       }
@@ -159,8 +168,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return false;
       }
       
-      // Sync local reminders to Supabase
-      await reminderService.syncReminders();
+      // After successful signup, try to get the session
+      const { session } = await authService.getSession();
+      
+      if (session?.user) {
+        setUser(session.user);
+        setSession(session);
+        setIsAuthenticated(true);
+        
+        // Ensure profile is created
+        await profileService.ensureProfile(session.user);
+        
+        // Sync local reminders to Supabase
+        await reminderService.syncReminders();
+      }
       
       return true;
     } catch (error) {
@@ -301,32 +322,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return handleError(authError);
       }
       
-      // Update user metadata if name is provided
-      if (data.full_name) {
-        const { error: metadataError } = await authService.updateUserMetadata({
-          full_name: data.full_name
-        });
-        
-        if (metadataError) {
-          return handleError(metadataError);
-        }
-      }
+      // Use profile service instead of direct update
+      const { error } = await profileService.updateProfile({
+        full_name: data.full_name,
+        email: data.email,
+        phone_number: data.phone_number,
+        age: data.age,
+        blood_type: data.blood_type,
+        language: data.language,
+      });
       
-      // Update profile in database
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .update(data)
-        .eq('user_id', user.id)
-        .select()
-        .single();
-        
       if (error) {
-        const authError = new AuthServiceError(
+        return handleError(new AuthServiceError(
           'Failed to update profile',
           AuthErrorType.UNKNOWN_ERROR,
           error
-        );
-        return handleError(authError);
+        ));
       }
       
       return true;

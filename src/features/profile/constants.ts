@@ -12,15 +12,28 @@ export const MAX_AGE = 120;
 
 // Default values
 export type ProfileType = {
-  name: string;
-  age: number;
-  medicalConditions: string[];
-  medications: string[];
+  id?: string;
+  user_id?: string;
+  full_name: string;
+  email?: string;
+  phone_number?: string;
+  age?: number;
+  blood_type?: string;
+  medical_conditions?: string[];
+  medications?: string[];
+  allergies?: string[];
+  preferred_notification_time?: string;
+  language?: string;
+  created_at?: string;
+  updated_at?: string;
 };
 
 export const DEFAULT_PROFILE: ProfileType = {
-  name: 'Guest',
+  full_name: 'Guest',
   age: 0,
-  medicalConditions: [],
+  medical_conditions: [],
   medications: [],
+  allergies: [],
+  preferred_notification_time: '09:00',
+  language: 'en',
 }; 
