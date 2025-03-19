@@ -21,6 +21,7 @@ interface AuthContextType {
   updatePassword: (newPassword: string) => Promise<boolean>;
   updateProfile: (data: Partial<Profile>) => Promise<boolean>;
   clearError: () => void;
+  verifySession: () => Promise<boolean>;
 }
 
 interface Profile {
@@ -47,57 +48,189 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [error, setError] = useState<AuthServiceError | null>(null);
   const { t } = useTranslation();
 
+  const checkAuth = async () => {
+    try {
+      setLoading(true);
+      
+      // First, get the current session
+      const { session, error } = await authService.getSession();
+      
+      if (error) {
+        console.log('Error checking session in AuthContext:', error.message);
+        setIsAuthenticated(false);
+        setUser(null);
+        setSession(null);
+        return;
+      }
+      
+      if (session) {
+        // Verify the session is actually valid by making a test request
+        try {
+          const { data, error: testError } = await supabase
+            .from('reminders')
+            .select('count')
+            .limit(1);
+            
+          if (testError) {
+            console.log('Session appears invalid in test request:', testError.message);
+            
+            // Session exists but is invalid, try to refresh
+            const { session: refreshedSession, error: refreshError } = await authService.refreshSession();
+            
+            if (refreshError || !refreshedSession) {
+              console.log('Failed to refresh invalid session:', refreshError?.message);
+              setIsAuthenticated(false);
+              setUser(null);
+              setSession(null);
+              return;
+            }
+            
+            // Refresh successful
+            setUser(refreshedSession.user);
+            setSession(refreshedSession);
+            setIsAuthenticated(true);
+            
+            // Ensure profile exists for the user
+            if (refreshedSession.user) {
+              await profileService.ensureProfile(refreshedSession.user);
+            }
+          } else {
+            // Session is valid
+            setUser(session.user);
+            setSession(session);
+            setIsAuthenticated(true);
+            
+            // Ensure profile exists for the user
+            if (session.user) {
+              await profileService.ensureProfile(session.user);
+            }
+          }
+        } catch (e) {
+          console.error('Error testing session validity:', e);
+          setIsAuthenticated(false);
+          setUser(null);
+          setSession(null);
+        }
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+        setSession(null);
+      }
+    } catch (e) {
+      console.error('Error in checkAuth:', e);
+      setIsAuthenticated(false);
+      setUser(null);
+      setSession(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Initialize auth state
   useEffect(() => {
-    const initializeAuth = async () => {
-      try {
-        setLoading(true);
-        
-        const { session, error } = await authService.getSession();
-        
-        if (error) {
-          console.error('Error getting session:', error);
-          return;
-        }
-        
-        if (session) {
-          setUser(session.user);
-          setSession(session);
-          setIsAuthenticated(true);
-          
-          // Ensure profile exists for the user
-          if (session.user) {
-            await profileService.ensureProfile(session.user);
-          }
-        }
-      } catch (error) {
-        console.error('Error in initializeAuth:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    initializeAuth();
+    checkAuth();
     
     // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event);
-        setUser(session?.user ?? null);
-        setSession(session);
-        setIsAuthenticated(!!session);
         
-        if (session?.user) {
-          // Create or get profile when user logs in
-          await profileService.ensureProfile(session.user);
+        if (event === 'SIGNED_OUT') {
+          setUser(null);
+          setSession(null);
+          setIsAuthenticated(false);
+          return;
+        }
+        
+        if (session) {
+          // Verify the session is valid
+          try {
+            const { data, error: testError } = await supabase
+              .from('reminders')
+              .select('count')
+              .limit(1);
+              
+            if (testError) {
+              console.log('New session invalid in test request:', testError.message);
+              return;
+            }
+            
+            setUser(session.user);
+            setSession(session);
+            setIsAuthenticated(true);
+            
+            // Create or get profile when user logs in
+            if (session.user) {
+              await profileService.ensureProfile(session.user);
+            }
+          } catch (e) {
+            console.error('Error validating new session:', e);
+          }
+        } else {
+          setUser(null);
+          setSession(null);
+          setIsAuthenticated(false);
         }
       }
     );
-
+    
     return () => {
       authListener.subscription.unsubscribe();
     };
   }, []);
+
+  /**
+   * Verify and refresh the session if needed
+   * Use this before making any authenticated requests
+   */
+  const verifySession = async (): Promise<boolean> => {
+    try {
+      if (!isAuthenticated || !session) {
+        console.log('verifySession: No active session');
+        return false;
+      }
+      
+      // Check if session is still valid with a test request
+      const { error: testError } = await supabase
+        .from('reminders')
+        .select('count')
+        .limit(1);
+        
+      if (!testError) {
+        // Session is still valid
+        return true;
+      }
+      
+      console.log('verifySession: Session needs refresh, attempting to refresh...');
+      
+      // Try to refresh the session
+      const { session: refreshedSession, error: refreshError } = await authService.refreshSession();
+      
+      if (refreshError || !refreshedSession) {
+        console.error('verifySession: Failed to refresh session:', refreshError?.message);
+        
+        // If refresh failed, check if we need to force sign out
+        if (refreshError?.message?.includes('Auth session missing')) {
+          console.log('verifySession: Auth session missing, signing out...');
+          await signOut();
+          return false;
+        }
+        
+        return false;
+      }
+      
+      // Update the session state with the refreshed session
+      setUser(refreshedSession.user);
+      setSession(refreshedSession);
+      setIsAuthenticated(true);
+      
+      console.log('verifySession: Session refreshed successfully');
+      return true;
+    } catch (error) {
+      console.error('verifySession: Error verifying session:', error);
+      return false;
+    }
+  };
 
   const clearError = () => {
     setError(null);
@@ -370,6 +503,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     updatePassword,
     updateProfile,
     clearError,
+    verifySession,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

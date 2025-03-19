@@ -8,6 +8,8 @@ export const STORAGE_KEYS = {
   REMINDERS: 'reminders',
   EMERGENCY_CONTACTS: 'emergency_contacts',
   NOTIFICATION_IDS: 'notification_ids',
+  PENDING_NOTIFICATIONS: 'pending_notifications',
+  SYNC_QUEUE: 'sync_queue'
 }; 
 
 export const MAX_CONTACTS = 5;

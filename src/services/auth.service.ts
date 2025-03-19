@@ -557,8 +557,72 @@ export const authService = {
   // Check if user is authenticated
   isAuthenticated: async (): Promise<boolean> => {
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      return !!session;
+      // Check for current session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Error getting session in isAuthenticated:', sessionError);
+      }
+      
+      if (session) {
+        return true;
+      }
+      
+      // Try to refresh the session
+      console.log('No active session found in isAuthenticated, attempting to refresh...');
+      try {
+        const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+        
+        if (refreshError) {
+          console.error('Failed to refresh session in isAuthenticated:', refreshError);
+          
+          // Check for specific error types
+          if (refreshError.message.includes('Auth session missing')) {
+            console.error('AuthSessionMissingError: Session may be expired or invalid');
+            // Try to recover by checking if we have a user even without a valid session
+            const { data: userData } = await supabase.auth.getUser();
+            if (userData.user) {
+              console.log('User exists despite session issues, attempting to force session refresh');
+              
+              // Get stored tokens if available
+              const storedSession = await storageService.get<Session>(SESSION_STORAGE_KEY);
+              if (storedSession?.refresh_token) {
+                try {
+                  // Attempt to explicitly set the session with stored tokens
+                  const { error: setSessionError } = await supabase.auth.setSession({
+                    access_token: storedSession.access_token,
+                    refresh_token: storedSession.refresh_token
+                  });
+                  
+                  if (setSessionError) {
+                    console.error('Failed to set session from stored tokens:', setSessionError);
+                    return false;
+                  }
+                  
+                  console.log('Successfully restored session from stored tokens');
+                  return true;
+                } catch (setSessionError) {
+                  console.error('Exception when setting session:', setSessionError);
+                  return false;
+                }
+              }
+            }
+          }
+          
+          return false;
+        }
+        
+        if (!refreshData.session) {
+          console.log('No session returned after refresh in isAuthenticated');
+          return false;
+        }
+        
+        console.log('Session refreshed successfully in isAuthenticated');
+        return true;
+      } catch (refreshError) {
+        console.error('Exception during session refresh in isAuthenticated:', refreshError);
+        return false;
+      }
     } catch (error) {
       console.error('Error checking authentication status:', error);
       return false;

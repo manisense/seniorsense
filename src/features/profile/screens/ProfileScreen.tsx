@@ -15,7 +15,7 @@ type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 export const ProfileScreen = () => {
   const { theme } = useTheme();
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const navigation = useNavigation<NavigationProp>();
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -147,6 +147,22 @@ export const ProfileScreen = () => {
     setDialogType(type);
     setNewItem('');
     setShowAddDialog(true);
+  };
+
+  // Handle sign out function
+  const handleSignOut = async () => {
+    try {
+      const success = await signOut();
+      if (success) {
+        // Navigation will happen automatically through auth state changes
+        console.log('User signed out successfully');
+      } else {
+        Alert.alert(t('profile.signOutError'), t('profile.tryAgain'));
+      }
+    } catch (error) {
+      console.error('Error signing out:', error);
+      Alert.alert(t('profile.signOutError'), t('profile.tryAgain'));
+    }
   };
 
   if (isLoading) {
@@ -380,6 +396,17 @@ export const ProfileScreen = () => {
         {t('profile.settings')}
       </Button>
 
+      <Button
+        mode="outlined"
+        onPress={handleSignOut}
+        style={[styles.signOutButton, { borderColor: theme.colors.error }]}
+        icon="logout"
+        buttonColor={theme.colors.surfaceVariant}
+        textColor={theme.colors.error}
+      >
+        {t('profile.signOut')}
+      </Button>
+
       {/* Add Dialog */}
       <CustomDialog
         visible={showAddDialog}
@@ -468,6 +495,10 @@ const styles = StyleSheet.create({
   },
   settingsButton: {
     marginTop: 8,
+  },
+  signOutButton: {
+    marginTop: 16,
+    marginBottom: 24,
   }
 });
 

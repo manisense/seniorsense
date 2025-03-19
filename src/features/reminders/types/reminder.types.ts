@@ -11,6 +11,7 @@ export type DoseType =
   | 'inhaler';
 export type NotificationSound = 'default' | 'none';
 export type SnoozeInterval = 10 | 30 | 60; // minutes
+export type SyncStatus = 'synced' | 'pending_sync' | 'error';
 
 export interface ReminderFrequency {
   type: FrequencyType;
@@ -53,6 +54,11 @@ export interface Reminder {
   notificationSettings: ReminderNotificationSettings;
   doses: ReminderDose[];
   notifications: ReminderNotification[];
+  syncStatus?: SyncStatus;
+  lastSyncAttempt?: string;
+  syncError?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface NotificationData {

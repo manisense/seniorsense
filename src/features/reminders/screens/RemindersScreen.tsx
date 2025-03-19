@@ -51,6 +51,15 @@ import {
   getLatestDoseStatus,
   getStatusColor,
 } from "../utils/helpers";
+import { reminderSyncService } from '../../../services/reminderSyncService';
+import { isConnected } from '../../../utils/networkUtils';
+import supabase from '../../../services/supabase';
+import { authService } from '../../../services/auth.service';
+import { testSupabaseConnection, getTableColumns, testCompleteReminderFlow } from '../../../services/supabaseTest';
+import { setupRemindersTable } from '../../../services/setupDatabase';
+import { clearSyncQueue } from '../../../services/syncQueueService';
+import { useAuth } from '../../../context/AuthContext';
+import { useNavigation } from "@react-navigation/native";
 
 interface DatePickerEvent {
   type: string;
@@ -262,6 +271,8 @@ const ReminderCard = ({
 const RemindersScreen: React.FC = (): ReactElement => {
   const { theme } = useTheme();
   const { t } = useTranslation();
+  const navigation = useNavigation();
+  const authContext = useAuth();
 
   // State declarations
   const [reminders, setReminders] = useState<Reminder[]>([]);
@@ -329,6 +340,8 @@ const RemindersScreen: React.FC = (): ReactElement => {
     "asthma",
     "other",
   ];
+
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     const initializeApp = async () => {
@@ -870,7 +883,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           (time) =>
             `${String(time.getHours()).padStart(2, "0")}:${String(
               time.getMinutes()
-            ).padStart(2, "0")}`
+            ).padStart(2, "0")}`,
         ),
         isActive: true,
         notificationSettings: {
@@ -1134,6 +1147,235 @@ const RemindersScreen: React.FC = (): ReactElement => {
     </Portal>
   );
 
+  const runDebugSync = async () => {
+    // Show a sync dialog
+    Alert.alert(
+      'Sync Debug',
+      'Running sync diagnostics...',
+      [{ text: 'OK', onPress: async () => {
+        try {
+          // Check connectivity
+          const connected = await isConnected();
+          if (!connected) {
+            Alert.alert('Sync Debug', 'Device is offline. Please connect to the internet and try again.');
+            return;
+          }
+          
+          // Try to explicitly verify and refresh the session first
+          console.log('Explicitly verifying and refreshing session...');
+          const sessionValid = await authContext.verifySession();
+          
+          if (!sessionValid) {
+            console.error('Session verification failed - session is invalid and could not be refreshed');
+            Alert.alert(
+              'Authentication Error', 
+              'Your authentication session is invalid and could not be refreshed. Please try signing out and signing back in to fix this issue.'
+            );
+            return;
+          }
+          
+          console.log('Session verification successful ✅');
+          
+          // Check authentication status first with our enhanced method
+          console.log('Checking authentication status with authService.isAuthenticated()...');
+          const isAuth = await authService.isAuthenticated();
+          console.log('Authentication status:', isAuth ? 'Authenticated ✅' : 'Not authenticated ❌');
+          
+          if (!isAuth) {
+            Alert.alert('Sync Debug', 'User is not authenticated according to authService. Please sign in to sync reminders.');
+            return;
+          }
+          
+          // Log current user details
+          console.log('Getting current user details...');
+          const { data: userData } = await supabase.auth.getUser();
+          if (userData.user) {
+            console.log('Current user:', userData.user.email);
+            console.log('User ID:', userData.user.id);
+          } else {
+            console.log('No user found from getUser() despite isAuthenticated returning true');
+          }
+          
+          // Detailed session check
+          console.log('Getting detailed session information...');
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            Alert.alert('Session Error', `Error getting session: ${sessionError.message}`);
+            return;
+          }
+          
+          // Log session details for debugging
+          if (sessionData.session) {
+            const expiresAt = new Date(sessionData.session.expires_at! * 1000);
+            const now = new Date();
+            const isExpired = now > expiresAt;
+            
+            console.log('Session details:');
+            console.log('- User:', sessionData.session.user.email);
+            console.log('- Expires at:', expiresAt.toLocaleString());
+            console.log('- Is expired:', isExpired ? 'Yes ❌' : 'No ✅');
+            console.log('- Access token (first 20 chars):', sessionData.session.access_token.substring(0, 20) + '...');
+            console.log('- Refresh token exists:', !!sessionData.session.refresh_token);
+          } else {
+            console.log('No active session found, attempting to refresh...');
+            Alert.alert(
+              'Session Warning', 
+              'No active session found despite successful verification. This is unexpected behavior. Try signing out and back in.'
+            );
+            return;
+          }
+          
+          // Check Supabase connection with detailed error info
+          try {
+            console.log('Testing database connection...');
+            const { data, error } = await supabase.from('reminders').select('count').limit(1);
+            if (error) {
+              console.error('Supabase query error:', error);
+              
+              // Check for specific error types
+              if (error.message.includes('JWT expired')) {
+                Alert.alert('Authentication Error', 'Your session token has expired. Please log out and log in again.');
+              } else if (error.message.includes('Authentication failed')) {
+                Alert.alert('Authentication Error', 'Authentication failed when connecting to Supabase. Please log out and log in again.');
+              } else {
+                Alert.alert('Supabase Error', `Failed to connect to Supabase: ${error.message}`);
+              }
+              return;
+            }
+            console.log('Supabase connection test successful:', data);
+          } catch (err) {
+            console.error('Exception during Supabase connection test:', err);
+            Alert.alert('Supabase Error', `Exception when connecting to Supabase: ${err instanceof Error ? err.message : String(err)}`);
+            return;
+          }
+          
+          // Get sync stats
+          console.log('Getting sync statistics...');
+          const stats = await reminderService.getSyncStats();
+          console.log('Sync stats:', stats);
+          
+          // Try sync with additional logging
+          console.log('Starting reminder sync process...');
+          const syncResult = await reminderService.syncReminders();
+          console.log('Sync process completed with result:', syncResult ? 'Success ✅' : 'Failure ❌');
+          
+          // Get updated stats after sync
+          const updatedStats = await reminderService.getSyncStats();
+          console.log('Updated sync stats after sync attempt:', updatedStats);
+          
+          // Show results
+          Alert.alert(
+            'Sync Results', 
+            `Sync ${syncResult ? 'successful ✅' : 'failed ❌'}\n\n` +
+            `Before sync:\n` +
+            `Total: ${stats.total}\n` +
+            `Synced: ${stats.synced}\n` +
+            `Pending: ${stats.pending}\n` +
+            `Error: ${stats.error}\n\n` +
+            `After sync:\n` +
+            `Total: ${updatedStats.total}\n` +
+            `Synced: ${updatedStats.synced}\n` +
+            `Pending: ${updatedStats.pending}\n` +
+            `Error: ${updatedStats.error}\n\n` +
+            `Run this again to try syncing any remaining reminders.`
+          );
+        } catch (err) {
+          console.error('Exception during debug sync process:', err);
+          Alert.alert('Sync Error', `Exception during sync process: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }}]
+    );
+  };
+
+  const showAlert = (title: string, message: string) => {
+    Alert.alert(
+      title,
+      message,
+      [{ text: 'OK', onPress: () => console.log('OK Pressed') }],
+      { cancelable: false }
+    );
+  };
+
+  const testAuthStatus = async () => {
+    try {
+      console.log('Checking authentication status with authService.isAuthenticated()...');
+      const isAuthenticated = await authService.isAuthenticated();
+      console.log(`Authentication status: ${isAuthenticated ? 'Authenticated ✅' : 'Not authenticated ❌'}`);
+      
+      // Get detailed session info
+      console.log('Getting detailed session information...');
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+      
+      if (sessionError) {
+        console.error('Session error:', sessionError);
+        showAlert('Authentication Error', `Session error: ${sessionError.message}`);
+        return;
+      }
+      
+      if (!sessionData.session) {
+        console.log('No active session found, attempting to refresh...');
+        
+        try {
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+          
+          if (refreshError) {
+            console.error('Session refresh error:', refreshError);
+            
+            // Special handling for AuthSessionMissingError
+            if (refreshError.message.includes('Auth session missing')) {
+              console.error('AuthSessionMissingError detected - this might require logging out and back in');
+              
+              // Try to check if we still have a user
+              const { data: userData } = await supabase.auth.getUser();
+              
+              showAlert(
+                'Authentication Issue', 
+                `Your session appears to be invalid (AuthSessionMissingError).\n\n` +
+                `User data: ${userData.user ? 'Available' : 'Missing'}\n\n` +
+                `Please try logging out and logging back in to resolve this issue.`
+              );
+              return;
+            }
+            
+            showAlert('Session Refresh Failed', refreshError.message);
+            return;
+          }
+          
+          if (!refreshData.session) {
+            showAlert('Session Warning', 'No session returned after refresh attempt.');
+            return;
+          }
+          
+          // Show session information
+          showAlert(
+            'Session Information',
+            `Session refreshed successfully ✅\n\n` +
+            `User ID: ${refreshData.session.user.id}\n` +
+            `Expires at: ${new Date(refreshData.session.expires_at! * 1000).toLocaleString()}\n` +
+            `Token length: ${refreshData.session.access_token.length} chars`
+          );
+        } catch (error) {
+          console.error('Error during refresh:', error);
+          showAlert('Refresh Error', `Error: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      } else {
+        // Show session information
+        showAlert(
+          'Session Information',
+          `Active session found ✅\n\n` +
+          `User ID: ${sessionData.session.user.id}\n` +
+          `Expires at: ${new Date(sessionData.session.expires_at! * 1000).toLocaleString()}\n` +
+          `Token length: ${sessionData.session.access_token.length} chars`
+        );
+      }
+    } catch (error) {
+      console.error('Error testing auth status:', error);
+      showAlert('Auth Test Error', `Error: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
   return (
     <Surface
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -1143,12 +1385,12 @@ const RemindersScreen: React.FC = (): ReactElement => {
           <Card
             style={[styles.card, { backgroundColor: theme.colors.surface }]}
           >
-            <Card.Content>
-              <TextInput
+        <Card.Content>
+          <TextInput
                 label={t("reminders.medicineName")}
-                value={medicineName}
-                onChangeText={setMedicineName}
-                style={styles.input}
+            value={medicineName}
+            onChangeText={setMedicineName}
+            style={styles.input}
                 mode="outlined"
                 theme={theme}
                 textColor={theme.colors.text}
@@ -1184,7 +1426,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
               {/* Existing dosage selector */}
               <TouchableOpacity
-                onPress={() => setShowDosageModal(true)}
+            onPress={() => setShowDosageModal(true)}
                 style={[styles.selector, { borderColor: theme.colors.outline }]}
               >
                 <Text style={[styles.label, { color: theme.colors.text }]}>
@@ -1240,17 +1482,17 @@ const RemindersScreen: React.FC = (): ReactElement => {
                   ))}
                 </View>
               )}
-              <View style={styles.dateContainer}>
+          <View style={styles.dateContainer}>
                 <Text
                   style={[styles.sectionTitle, { color: theme.colors.text }]}
                 >
                   {t("reminders.duration")}
-                </Text>
+            </Text>
                 <TouchableOpacity
-                  onPress={() => {
+              onPress={() => {
                     setDatePickerMode("start");
-                    setShowDatePicker(true);
-                  }}
+                setShowDatePicker(true);
+              }}
                   style={[
                     styles.timeInput,
                     { borderColor: theme.colors.outline },
@@ -1263,9 +1505,9 @@ const RemindersScreen: React.FC = (): ReactElement => {
                   </Text>
                   <Text
                     style={[styles.timeValue, { color: theme.colors.primary }]}
-                  >
-                    {startDate.toLocaleDateString()}
-                  </Text>
+            >
+              {startDate.toLocaleDateString()}
+            </Text>
                   <MaterialCommunityIcons
                     name="calendar"
                     size={24}
@@ -1274,10 +1516,10 @@ const RemindersScreen: React.FC = (): ReactElement => {
                 </TouchableOpacity>
 
                 <TouchableOpacity
-                  onPress={() => {
+              onPress={() => {
                     setDatePickerMode("end");
-                    setShowDatePicker(true);
-                  }}
+                setShowDatePicker(true);
+              }}
                   style={[
                     styles.timeInput,
                     { borderColor: theme.colors.outline },
@@ -1290,8 +1532,8 @@ const RemindersScreen: React.FC = (): ReactElement => {
                   </Text>
                   <Text
                     style={[styles.timeValue, { color: theme.colors.primary }]}
-                  >
-                    {endDate.toLocaleDateString()}
+            >
+              {endDate.toLocaleDateString()}
                   </Text>
                   <MaterialCommunityIcons
                     name="calendar"
@@ -1299,7 +1541,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
                     color={theme.colors.primary}
                   />
                 </TouchableOpacity>
-              </View>
+          </View>
               <Button
                 mode="outlined"
                 onPress={() => setShowFrequencyModal(true)}
@@ -1307,37 +1549,37 @@ const RemindersScreen: React.FC = (): ReactElement => {
               >
                 {t(`reminders.frequency.${frequencyType}`)}
               </Button>
-              <View style={styles.notificationSettings}>
-                <Text style={[styles.label, { color: theme.colors.text }]}>
+          <View style={styles.notificationSettings}>
+            <Text style={[styles.label, { color: theme.colors.text }]}>
                   {t("reminders.notificationSettings")}
-                </Text>
-                <View style={styles.settingRow}>
+            </Text>
+            <View style={styles.settingRow}>
                   <Text>{t("reminders.sound")}</Text>
-                  <Switch
+              <Switch
                     value={notificationSound === "default"}
                     onValueChange={(value) =>
                       setNotificationSound(value ? "default" : "none")
                     }
                     color={theme.colors.primary}
-                  />
-                </View>
-                <View style={styles.settingRow}>
+              />
+            </View>
+            <View style={styles.settingRow}>
                   <Text>{t("reminders.vibration")}</Text>
-                  <Switch
-                    value={vibrationEnabled}
-                    onValueChange={setVibrationEnabled}
-                  />
-                </View>
-              </View>
-              <Button
-                mode="contained"
+              <Switch
+                value={vibrationEnabled}
+                onValueChange={setVibrationEnabled}
+              />
+            </View>
+          </View>
+          <Button
+            mode="contained"
                 onPress={handleSubmit}
-                style={styles.addButton}
-              >
+            style={styles.addButton}
+          >
                 {t("reminders.addNew")}
-              </Button>
-            </Card.Content>
-          </Card>
+          </Button>
+        </Card.Content>
+      </Card>
         </ScrollView>
       ) : (
         <ScrollView style={styles.scrollView}>
@@ -1451,7 +1693,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           >
             <Text style={[styles.modalTitle, { color: theme.colors.text }]}>
               {t("reminders.selectDoseType")}
-            </Text>
+                </Text>
             <View style={styles.optionsList}>
               {DOSE_TYPES.map((type) => (
                 <TouchableOpacity
@@ -1550,6 +1792,64 @@ const RemindersScreen: React.FC = (): ReactElement => {
           </View>
         </TouchableOpacity>
       </Modal>
+
+      {/* Debug Tools */}
+      {__DEV__ && (
+        <View style={{ padding: 16, marginTop: 20 }}>
+          <Button
+            mode="outlined"
+            onPress={runDebugSync}
+            icon="sync"
+            style={{ marginBottom: 10 }}
+          >
+            Debug Sync
+          </Button>
+          
+          <Button
+            mode="outlined"
+            onPress={async () => {
+              showAlert('Supabase Test', 'Testing connection and data structure...');
+              console.log('Running Supabase connection test...');
+              const success = await testSupabaseConnection();
+              showAlert(
+                'Supabase Test Results', 
+                success 
+                  ? '✅ Connection test successful! Check logs for details.' 
+                  : '❌ Connection test failed. Check logs for details.'
+              );
+              
+              // Also check table columns
+              const columns = await getTableColumns();
+              if (columns) {
+                console.log('Table columns:', columns);
+                console.log('Expected columns: id, user_id, medicine_name, dosage, dose_type, illness_type, frequency, start_date, end_date, times, is_active, notification_settings, doses, notifications, created_at, updated_at');
+                
+                // Check if all required columns exist
+                const requiredColumns = ['id', 'user_id', 'medicine_name', 'dosage', 'dose_type', 'frequency', 'start_date', 'end_date', 'times', 'is_active', 'notification_settings'];
+                const missingColumns = requiredColumns.filter(col => !columns.includes(col));
+                
+                if (missingColumns.length > 0) {
+                  console.error('❌ Missing required columns:', missingColumns);
+                  showAlert('Missing Columns', `Your Supabase table is missing these required columns: ${missingColumns.join(', ')}`);
+                }
+              }
+            }}
+            icon="database"
+            style={{ marginBottom: 10 }}
+          >
+            Test Supabase
+          </Button>
+          
+          <Button
+            mode="outlined"
+            onPress={testAuthStatus}
+            icon="account-key"
+            style={{ marginBottom: 10 }}
+          >
+            Test Auth
+          </Button>
+        </View>
+      )}
     </Surface>
   );
 };

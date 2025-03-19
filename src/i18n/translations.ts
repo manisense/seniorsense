@@ -264,7 +264,10 @@ export default {
       loading: 'Saving...',
       completeness: 'Profile Completeness',
       contactError: 'Error accessing contacts',
-      preferredTime: 'Preferred Notification Time'
+      preferredTime: 'Preferred Notification Time',
+      signOut: 'Sign Out',
+      signOutError: 'Sign Out Error',
+      tryAgain: 'Please try again later',
     },
     settings: {
       title: 'Settings',
@@ -792,7 +795,10 @@ export default {
       loading: 'सहेज रहा है...',
       completeness: 'प्रोफ़ाइल पूर्णता',
       contactError: 'संपर्क पहुंचने में त्रुटि',
-      preferredTime: 'प्राथमिक सूचना समय'
+      preferredTime: 'प्राथमिक सूचना समय',
+      signOut: 'साइन आउट',
+      signOutError: 'साइन आउट त्रुटि',
+      tryAgain: 'कृपया बाद में पुन: प्रयास करें',
     },
     settings: {
       title: 'सेटिंग्स',

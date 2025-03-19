@@ -6,7 +6,7 @@ import { useTranslation } from '../../../hooks/useTranslation';
 import { medicineHistoryService, MedicineHistoryItem } from '../../../services/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../../../navigation/StackNavigator';
+import { RootStackParamList } from '../../../navigation/types';
 import { format } from 'date-fns';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
