@@ -1,23 +1,57 @@
 {
   "cli": {
-    "version": ">= 3.13.3"
+    "version": ">= 6.0.0"
   },
   "build": {
     "development": {
       "developmentClient": true,
       "distribution": "internal",
+      "channel": "development",
       "android": {
-        "buildType": "apk"
+        "gradleCommand": ":app:assembleDebug"
+      },
+      "ios": {
+        "buildConfiguration": "Debug"
       }
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
+        "image": "latest"
+      },
+      "channel": "preview",
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://your-api-url.com"
+      },
+      "cache": {
+        "disabled": false
+      },
+      "resourceClass": "medium"
+    },
+    "buildTest": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
+        "gradleCommand": ":app:assembleRelease",
+        "image": "latest"
+      },
+      "resourceClass": "medium",
+      "cache": {
+        "disabled": true
+      }
+    },
+    "local-production": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk",
         "gradleCommand": ":app:assembleRelease"
       }
     },
-    "production": {}
+    "production": {
+      "channel": "production"
+    }
   },
   "submit": {
     "production": {}
