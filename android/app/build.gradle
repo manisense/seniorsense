@@ -86,9 +86,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace 'com.seniorsense.app'
+    namespace 'com.manishtf.seniorwellnessapp'
     defaultConfig {
-        applicationId 'com.seniorsense.app'
+        applicationId 'com.manishtf.seniorwellnessapp'
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
