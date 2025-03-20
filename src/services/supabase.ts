@@ -268,7 +268,7 @@ export const medicineHistoryService = {
       console.log('Fetching medicine history from Supabase...');
       
       // Check auth status just to verify authentication
-      const { isAuthenticated } = await checkAuthStatus();
+      const { isAuthenticated, userId } = await checkAuthStatus();
       
       if (!isAuthenticated) {
         console.log('User not authenticated, skipping Supabase query');
@@ -283,6 +283,7 @@ export const medicineHistoryService = {
       const { data, error } = await supabase
         .from('medicine_history')
         .select('*')
+        .eq('user_id', userId)
         .order('created_at', { ascending: false });
         
       if (error) {
@@ -487,7 +488,8 @@ export const medicineHistoryService = {
       // 1. First get all existing remote items
       const { data: remoteItems, error: remoteError } = await supabase
         .from('medicine_history')
-        .select('*');
+        .select('*')
+        .eq('user_id', userId); // Only get items for this user
         
       if (remoteError) {
         console.error('Error fetching remote medicine history:', remoteError);
@@ -516,9 +518,27 @@ export const medicineHistoryService = {
       
       console.log(`Need to sync ${itemsToSync.length} medicine items to Supabase`);
       
-      // 4. Sync each item to Supabase
+      // Create a set of existing medicine names to prevent duplicates
+      const existingMedicineNames = new Set(remoteItems?.map(item => 
+        item.medicine_name.toLowerCase().trim()
+      ) || []);
+      
+      // 4. Sync each item to Supabase, avoiding duplicates by medicine name
       let syncedCount = 0;
       for (const item of itemsToSync) {
+        // Skip items that already exist with the same medicine name (case insensitive)
+        const medicineName = item.medicine_name.toLowerCase().trim();
+        if (existingMedicineNames.has(medicineName)) {
+          console.log(`Skipping duplicate medicine: "${item.medicine_name}"`);
+          
+          // Still update the local item to mark it as synced with the proper user_id
+          await medicineHistoryLocalService.updateMedicineHistory({
+            ...item,
+            user_id: userId
+          });
+          continue;
+        }
+        
         console.log(`Syncing medicine item: ${item.id.substring(0, 8)}...`);
         
         // IMPORTANT: Create a clean copy of the item with a valid UUID for user_id
@@ -540,6 +560,9 @@ export const medicineHistoryService = {
             user_id: userId
           });
           console.log(`Successfully synced item: ${item.medicine_name}`);
+          
+          // Add to the set of existing names to prevent duplicates in this session
+          existingMedicineNames.add(medicineName);
         } else {
           console.error(`Error syncing medicine ${item.id}:`, error);
         }

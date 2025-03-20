@@ -11,6 +11,7 @@ import { medicineHistoryLocalService } from '../../../services/medicineHistoryLo
 import { useAuth } from '../../../context/AuthContext';
 import NetInfo from '@react-native-community/netinfo';
 import supabase from '../../../services/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -120,9 +121,9 @@ export const HealthScreen = () => {
       }
       
       // Also get local data in any case
-      console.log('Fetching local medicine history');
-      const localHistory = await medicineHistoryLocalService.getMedicineHistory();
-      console.log(`Retrieved ${localHistory.length} records from local storage`);
+      // console.log('Fetching local medicine history');
+      // const localHistory = await medicineHistoryLocalService.getMedicineHistory();
+      // console.log(`Retrieved ${localHistory.length} records from local storage`);
       
       // If we got data from Supabase, use it as primary source
       if (supabaseData.length > 0) {
@@ -130,45 +131,40 @@ export const HealthScreen = () => {
         
         // Find local items not in Supabase data
         const supabaseIds = new Set(supabaseData.map(item => item.id));
-        const localOnlyItems = localHistory.filter(item => !supabaseIds.has(item.id));
+        // const localOnlyItems = localHistory.filter(item => !supabaseIds.has(item.id));
         
-        console.log(`Found ${localOnlyItems.length} local-only items to merge`);
+        // console.log(`Found ${localOnlyItems.length} local-only items to merge`);
         
         // Merge Supabase and unique local items
-        const combinedData = [...supabaseData, ...localOnlyItems];
+        //const combinedData = [...supabaseData, ...localOnlyItems];
         
         // Sort by created_at date (newest first)
-        combinedData.sort((a, b) => 
+        supabaseData.sort((a, b) => 
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         
-        // Save Supabase items to local storage to ensure they're available offline
+        // Remove any potential duplicates (matching by id)
+        const uniqueItems = Array.from(
+          new Map(supabaseData.map(item => [item.id, item])).values()
+        );
+        
+        // IMPORTANT: We'll only update local items that already exist, not create new ones
+        // This prevents creating duplicate entries in local storage
         for (const item of supabaseData) {
           try {
-            // Use upsert approach: create or update based on ID
-            const existingItem = localHistory.find(localItem => localItem.id === item.id);
-            if (!existingItem) {
-              // Only save items we don't already have locally
-              await medicineHistoryLocalService.saveMedicineHistory(
-                item.medicine_name,
-                item.response_text,
-                item.image_url,
-                item.language || 'en',
-                item.identified_language,
-                item.has_reminder,
-                item.reminder_id,
-                item.notes,
-                item.metadata,
-                item.user_id
-              );
-            }
+            // Only update existing items in local storage
+            // const existingItem = localHistory.find(localItem => localItem.id === item.id);
+            // if (existingItem) {
+            //   // Just update the item if it exists
+            //   await medicineHistoryLocalService.updateMedicineHistory(item);
+            // }
           } catch (err) {
-            console.error('Error syncing item to local storage:', err);
+            console.error('Error updating item in local storage:', err);
           }
         }
         
         // Limit to recent items for the dashboard
-        const recentItems = combinedData.slice(0, 5);
+        const recentItems = uniqueItems.slice(0, 5);
         setMedicineHistory(recentItems);
         setFilteredHistory(recentItems);
         
@@ -183,20 +179,25 @@ export const HealthScreen = () => {
       // If no Supabase data, use only local storage
       console.log('No Supabase data found, using local storage only');
       
+      // Remove any potential duplicates (matching by id)
+      // const uniqueLocalItems = Array.from(
+      //   new Map(localHistory.map(item => [item.id, item])).values()
+      // );
+      
       // Sort by created_at date (newest first)
-      localHistory.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
+      // uniqueLocalItems.sort((a, b) => 
+      //   new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      // );
       
       // Limit to recent items for the Health dashboard
-      const recentItems = localHistory.slice(0, 5);
+      // const recentItems = uniqueLocalItems.slice(0, 5);
       
-      setMedicineHistory(recentItems);
-      setFilteredHistory(recentItems);
+      // setMedicineHistory(recentItems);
+      // setFilteredHistory(recentItems);
       
       // Extract unique medicine names for auto-suggest feature
-      const uniqueNames = Array.from(new Set(recentItems.map(item => item.medicine_name)));
-      setSuggestions(uniqueNames);
+      // const uniqueNames = Array.from(new Set(recentItems.map(item => item.medicine_name)));
+      // setSuggestions(uniqueNames);
     } catch (error) {
       console.error('Error loading medicine history:', error);
     } finally {
@@ -210,6 +211,18 @@ export const HealthScreen = () => {
       return;
     }
     
+    // Add throttling - only sync once every 60 seconds unless forced
+    const lastSyncTime = await AsyncStorage.getItem('LAST_SYNC_TIME');
+    const now = Date.now();
+    
+    if (!force && lastSyncTime) {
+      const timeSinceLastSync = now - parseInt(lastSyncTime);
+      if (timeSinceLastSync < 60000) { // 60 seconds
+        console.log(`Skipping sync - last sync was ${Math.floor(timeSinceLastSync/1000)} seconds ago`);
+        return;
+      }
+    }
+    
     console.log('Starting medicine history sync from health screen');
     try {
       // Set a flag to avoid multiple concurrent syncs
@@ -219,6 +232,9 @@ export const HealthScreen = () => {
       }
       
       setIsSyncing(true);
+      
+      // Save current time as last sync time
+      await AsyncStorage.setItem('LAST_SYNC_TIME', now.toString());
       
       // First try bi-directional sync
       const syncResult = await medicineHistoryService.syncMedicineHistory();
@@ -236,10 +252,20 @@ export const HealthScreen = () => {
             await supabase.auth.refreshSession();
           }
           
+          // Get the current user ID
+          const { data: userData } = await supabase.auth.getUser();
+          const userId = userData?.user?.id;
+          
+          if (!userId) {
+            console.log('Could not determine user ID for direct data fetch');
+            return;
+          }
+          
           // Now try to get data directly
           const { data, error } = await supabase
             .from('medicine_history')
             .select('*')
+            .eq('user_id', userId) // Filter by current user ID
             .order('created_at', { ascending: false });
             
           if (!error && data && data.length > 0) {
