@@ -343,6 +343,21 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // Store notification subscriptions for cleanup
+  const [notificationSubscriptions, setNotificationSubscriptions] = useState<any[]>([]);
+
+  // Add cleanup for notification subscriptions
+  useEffect(() => {
+    return () => {
+      // Remove all notification subscriptions when component unmounts
+      notificationSubscriptions.forEach(subscription => {
+        if (subscription && typeof subscription.remove === 'function') {
+          subscription.remove();
+        }
+      });
+    };
+  }, [notificationSubscriptions]);
+
   useEffect(() => {
     const initializeApp = async () => {
       console.log("Initializing reminders");
@@ -423,9 +438,11 @@ const RemindersScreen: React.FC = (): ReactElement => {
         endDate: endDate.toISOString(),
         times: times.map(
           (time) =>
-            `${String(time.getHours()).padStart(2, "0")}:${String(
-              time.getMinutes()
-            ).padStart(2, "0")}`
+            time.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true
+            })
         ),
         isActive: true,
         notificationSettings: {
@@ -440,8 +457,12 @@ const RemindersScreen: React.FC = (): ReactElement => {
 
       console.log("Adding new reminder with ID:", uniqueId);
       
-      // Save using our reminderService
-      const saveSuccess = await reminderService.saveReminder(newReminder);
+      // Schedule notifications first, which will add notification IDs to the reminder
+      const reminderWithNotifications = await scheduleNotifications(newReminder);
+      
+      // Save using our reminderService, but only once with the notifications included
+      console.log("Saving reminder with notifications");
+      const saveSuccess = await reminderService.saveReminder(reminderWithNotifications);
       
       if (!saveSuccess) {
         throw new Error("Failed to save reminder");
@@ -452,9 +473,6 @@ const RemindersScreen: React.FC = (): ReactElement => {
       // Reload the reminders to get the updated list
       await loadReminders();
       
-      // Schedule notifications
-      await scheduleNotifications(newReminder);
-      
       // Reset the form
       setShowAddForm(false);
       resetForm();
@@ -464,7 +482,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
     }
   };
 
-  const scheduleNotifications = async (reminder: Reminder) => {
+  const scheduleNotifications = async (reminder: Reminder): Promise<Reminder> => {
     try {
       console.log("Starting to schedule notifications for reminder:", reminder.medicineName);
       
@@ -483,16 +501,55 @@ const RemindersScreen: React.FC = (): ReactElement => {
           t("reminders.error"),
           t("reminders.notificationPermissionRequired")
         );
-        return;
+        return reminder; // Return original reminder if permissions not granted
       }
       
       // Create an array to store new notification IDs
       const newNotifications: ReminderNotification[] = [];
 
       for (const timeStr of reminder.times) {
-        const [hours, minutes] = timeStr.split(':').map(Number);
+        console.log(`Processing time: ${timeStr}`);
         
-        console.log(`Processing time: ${timeStr} (${hours}:${minutes})`);
+        // Parse the time string correctly from 12-hour format
+        let hours = 0;
+        let minutes = 0;
+        
+        try {
+          // Parse the time string based on expected format "hh:mm AM/PM"
+          const timeParts = timeStr.match(/(\d+):(\d+)\s?([AP]M)?/i);
+          
+          if (timeParts) {
+            let parsedHours = parseInt(timeParts[1], 10);
+            const parsedMinutes = parseInt(timeParts[2], 10);
+            const ampm = timeParts[3]?.toUpperCase() || '';
+            
+            // Convert to 24-hour format for scheduling
+            if (ampm === 'PM' && parsedHours < 12) {
+              parsedHours += 12;
+            } else if (ampm === 'AM' && parsedHours === 12) {
+              parsedHours = 0;
+            }
+            
+            hours = parsedHours;
+            minutes = parsedMinutes;
+          } else {
+            // Fallback parsing in case time string format is different
+            const date = new Date();
+            const [hourStr, minuteStr] = timeStr.split(':');
+            date.setHours(parseInt(hourStr, 10));
+            date.setMinutes(parseInt(minuteStr, 10));
+            hours = date.getHours();
+            minutes = date.getMinutes();
+          }
+          
+          console.log(`Parsed time: ${hours}:${minutes} (24-hour format)`);
+        } catch (parseError) {
+          console.error('Error parsing time string:', parseError, timeStr);
+          // Use current time as fallback
+          const now = new Date();
+          hours = now.getHours();
+          minutes = now.getMinutes();
+        }
         
         // Create the notification content with a proper title and description
         const content = {
@@ -507,7 +564,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           sound: reminder.notificationSettings.sound === 'default' ? 'default' : false, 
           data: { 
             reminderId: reminder.id,
-            type: 'reminder',
+            type: 'pill-reminder', // This type triggers the audio announcement
             medicineName: reminder.medicineName,
             dosage: reminder.dosage,
             doseType: reminder.doseType,
@@ -529,6 +586,28 @@ const RemindersScreen: React.FC = (): ReactElement => {
           
           notificationId = await notificationService.scheduleNotification(content, trigger);
           console.log(`Successfully scheduled notification for ${reminder.medicineName} at ${timeStr} with ID: ${notificationId}`);
+          
+          // Also schedule an immediate test notification to verify setup
+          const testContent = {
+            title: "Reminder Test",
+            body: `Testing notification for ${reminder.medicineName}`,
+            sound: "default",
+            data: {
+              type: "pill-reminder",
+              medicineName: reminder.medicineName,
+              reminderId: reminder.id,
+              isTest: true
+            }
+          };
+          
+          // Schedule 5 seconds from now
+          const testId = await notificationService.scheduleNotification(
+            testContent,
+            { seconds: 5 }
+          );
+          
+          console.log(`Scheduled test notification with ID: ${testId}`);
+          
         } catch (err) {
           console.error(`Error scheduling notification for ${timeStr}:`, err);
           notificationId = `manual-${Date.now()}-${Math.random().toString(36).substring(2, 5)}`;
@@ -543,83 +622,24 @@ const RemindersScreen: React.FC = (): ReactElement => {
         });
       }
 
-      // Also create an immediate test notification to confirm setup
-      try {
-        console.log('Scheduling test notification');
-        const testContent = {
-          title: t("reminders.reminderSetTitle") || "Reminder Set",
-          body: t("reminders.reminderSetBody", { 
-            medicineName: reminder.medicineName,
-            time: reminder.times[0] 
-          }) || `Your ${reminder.medicineName} reminder is set for ${reminder.times[0]}`,
-          sound: 'default',
-          data: { 
-            type: 'test',
-            reminderId: reminder.id
-          }
-        };
-
-        // Schedule immediate notification with a 5-second delay
-        await notificationService.scheduleNotification(
-          testContent, 
-          { seconds: 5 }
-        );
-        console.log(`Successfully scheduled test notification for ${reminder.medicineName}`);
-      } catch (err) {
-        console.error('Error scheduling test notification:', err);
-        // Continue even if test notification fails
-      }
-
-      // Find the reminder in the state
-      const reminderIndex = reminders.findIndex(r => r.id === reminder.id);
-      
-      if (reminderIndex >= 0) {
-        // Update existing reminder with new notifications
-        const updatedReminder = {
-          ...reminders[reminderIndex],
-          notifications: newNotifications // Replace all notifications
-        };
-        
-        // Create updated reminders array
-        const updatedReminders = [...reminders];
-        updatedReminders[reminderIndex] = updatedReminder;
-        
-        console.log(`Saving updated reminder with ${newNotifications.length} notifications`);
-        
-        // Save using our reminderService
-        const saveResult = await reminderService.saveReminder(updatedReminder);
-        if (!saveResult) {
-          console.error('Failed to save reminder with new notifications');
-        }
-        
-        // Update state
-        setReminders(updatedReminders);
-      } else {
-        // It's a new reminder, add notifications and update
-        const updatedReminder = {
-          ...reminder,
-          notifications: newNotifications
-        };
-        
-        console.log(`Saving new reminder with ${newNotifications.length} notifications`);
-        
-        // Save the updated reminder
-        const saveResult = await reminderService.saveReminder(updatedReminder);
-        if (!saveResult) {
-          console.error('Failed to save new reminder with notifications');
-        }
-        
-        // Reload reminders to get the updated list
-        await loadReminders();
-      }
+      // Create updated reminder with notifications
+      const updatedReminder = {
+        ...reminder,
+        notifications: newNotifications
+      };
       
       console.log(`Scheduled ${newNotifications.length} notifications for reminder: ${reminder.medicineName}`);
+      
+      // Return the updated reminder
+      return updatedReminder;
+      
     } catch (error) {
       console.error("Error scheduling notifications:", error);
       Alert.alert(
         t("reminders.error"),
         t("reminders.errorSchedulingNotifications")
       );
+      return reminder; // Return original reminder if there was an error
     }
   };
 
@@ -653,6 +673,13 @@ const RemindersScreen: React.FC = (): ReactElement => {
   };
 
   const handleTimePickerPress = (index: number) => {
+    // Initialize TTS engine first to ensure it's ready
+    try {
+      notificationService.initializeTts();
+    } catch (error) {
+      console.error("Error initializing TTS engine:", error);
+    }
+    
     setShowTimePickerIndex(index);
     setShowTimePicker(true);
   };
@@ -660,6 +687,12 @@ const RemindersScreen: React.FC = (): ReactElement => {
   const handleTimeChange = (event: DatePickerEvent, selectedDate?: Date) => {
     setShowTimePicker(false);
     if (selectedDate && showTimePickerIndex !== null) {
+      console.log("Selected time:", selectedDate.toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true
+      }));
+      
       const newTimes = [...times];
       newTimes[showTimePickerIndex] = selectedDate;
       setTimes(newTimes);
@@ -881,9 +914,11 @@ const RemindersScreen: React.FC = (): ReactElement => {
         endDate: endDate.toISOString(),
         times: times.map(
           (time) =>
-            `${String(time.getHours()).padStart(2, "0")}:${String(
-              time.getMinutes()
-            ).padStart(2, "0")}`,
+            time.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+              hour12: true
+            })
         ),
         isActive: true,
         notificationSettings: {
@@ -904,14 +939,14 @@ const RemindersScreen: React.FC = (): ReactElement => {
         }
       }
       
-      // Save the reminder
-      await reminderService.saveReminder(reminderData);
+      // Schedule notifications first, which will add notification IDs to the reminder
+      const reminderWithNotifications = await scheduleNotifications(reminderData);
+      
+      // Save the reminder with notifications
+      await reminderService.saveReminder(reminderWithNotifications);
       
       // Reload the reminders to get the updated list
       await loadReminders();
-
-      // Schedule new notifications
-      await scheduleNotifications(reminderData);
 
       resetForm();
       Alert.alert(
@@ -1415,6 +1450,18 @@ const RemindersScreen: React.FC = (): ReactElement => {
     );
   };
 
+  const testAudioAnnouncement = async () => {
+    try {
+      // Get the first reminder's medicine name, or use a default
+      const medicineName = reminders.length > 0 ? reminders[0].medicineName : 'Test Medicine';
+      await notificationService.testPillAnnouncement(medicineName);
+      Alert.alert('Test Audio', 'Testing audio announcement feature. You should hear a voice announcement.');
+    } catch (error) {
+      console.error('Error testing audio announcement:', error);
+      Alert.alert('Error', 'Failed to test audio announcement');
+    }
+  };
+
   return (
     <Surface
       style={[styles.container, { backgroundColor: theme.colors.background }]}
@@ -1509,7 +1556,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
                         {times[index]?.toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
-                          hour12: false,
+                          hour12: true,
                         })}
                       </Text>
                       <MaterialCommunityIcons
@@ -1687,6 +1734,24 @@ const RemindersScreen: React.FC = (): ReactElement => {
         color={theme.colors.surface}
       />
 
+      <FAB
+        icon="microphone"
+        onPress={testAudioAnnouncement}
+        style={[
+          styles.voiceTestFab,
+          {
+            backgroundColor: theme.colors.secondary || theme.colors.primary,
+            shadowColor:
+              theme.colors?.elevation?.level3 || "rgba(0, 0, 0, 0.15)",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.3,
+            shadowRadius: 4.65,
+            elevation: 6,
+          },
+        ]}
+        color={theme.colors.surface}
+      />
+
       {renderDosageModal()}
       {renderFrequencyModal()}
       {showDatePicker && (
@@ -1702,7 +1767,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
         <DateTimePicker
           value={times[showTimePickerIndex]}
           mode="time"
-          is24Hour={true}
+          is24Hour={false}
           onChange={(event, date) => handleTimeChange(event, date)}
         />
       )}
@@ -1833,7 +1898,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
       </Modal>
 
       {/* Debug Tools */}
-      {__DEV__ && (
+      {/* {__DEV__ && (
         <View style={{ padding: 16, marginTop: 20 }}>
           <Button
             mode="outlined"
@@ -1862,7 +1927,30 @@ const RemindersScreen: React.FC = (): ReactElement => {
             {t('reminders.debug.testAuth')}
           </Button>
         </View>
-      )}
+      )} */}
+
+      {/* Debug section */}
+      {/* <Card style={[styles.card, { marginTop: 20, backgroundColor: theme.colors.surface }]}>
+        <Card.Title title="Debug Tools" />
+        <Card.Content>
+          <View style={styles.debugButtonsContainer}>
+            <Button 
+              mode="outlined"
+              onPress={testNotifications} 
+              style={styles.debugButton}
+            >
+              Test Notification
+            </Button>
+            <Button 
+              mode="outlined"
+              onPress={testAudioAnnouncement} 
+              style={[styles.debugButton, { marginTop: 10 }]}
+            >
+              Test Voice Announcement
+            </Button>
+          </View>
+        </Card.Content>
+      </Card> */}
     </Surface>
   );
 };
@@ -1892,6 +1980,13 @@ const styles = StyleSheet.create({
     margin: 16,
     right: 0,
     bottom: 80, // Position above the main FAB
+    elevation: 2,
+  },
+  voiceTestFab: {
+    position: "absolute",
+    margin: 16,
+    right: 0,
+    bottom: 140, // Position above the test notification FAB
     elevation: 2,
   },
   scrollView: {
@@ -2163,6 +2258,12 @@ const styles = StyleSheet.create({
   },
   emptySubtext: {
     textAlign: "center",
+  },
+  debugButtonsContainer: {
+    gap: 8,
+  },
+  debugButton: {
+    marginBottom: 10,
   },
 });
 

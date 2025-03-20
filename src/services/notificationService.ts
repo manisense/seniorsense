@@ -3,15 +3,29 @@ import { Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../utils/constants';
 import * as Device from 'expo-device';
+import Tts from 'react-native-tts';
+import { profileService } from './profileService';
+
+// Interface for our pill reminder notification data
+interface PillReminderData {
+  type: string;
+  medicineName: string;
+  reminderId: string;
+  [key: string]: any;
+}
 
 // Configure notification handler globally
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-    priority: 'max', // Using string instead of enum
-  }),
+  handleNotification: async () => {
+    // We'll handle the notification in a foreground listener instead
+    // because of TS typing issues with the notification handler
+    return {
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+      priority: 'max',
+    };
+  },
 });
 
 // Define types for triggers
@@ -54,6 +68,105 @@ type NotificationRequest = {
 };
 
 export const notificationService = {
+  /**
+   * Announce a pill reminder with text-to-speech
+   */
+  announcePillReminder: async (medicineName: string): Promise<void> => {
+    try {
+      console.log('Starting pill reminder announcement for:', medicineName);
+      
+      // Get user profile to get their name
+      let userName = 'User';
+      try {
+        const profileResult = await profileService.getCachedProfile();
+        if (profileResult && profileResult.full_name) {
+          userName = profileResult.full_name;
+          console.log('Using user name from profile:', userName);
+        } else {
+          console.log('No user profile found, using default name');
+        }
+      } catch (profileError) {
+        console.error('Error getting user profile:', profileError);
+      }
+      
+      // Construct announcement text
+      const announcementText = `Please ${userName}, it's time to take your ${medicineName}.`;
+      console.log('Announcement text:', announcementText);
+      
+      // Initialize TTS with proper settings for clear announcement
+      try {
+        // Force stop any previous TTS that might be running
+        Tts.stop();
+        
+        if (Platform.OS === 'android') {
+          // For Android, we need to set the engine
+          await Tts.setDefaultEngine('com.google.android.tts');
+          console.log('Set TTS engine for Android');
+          
+          // Set speech rate slightly slower for clarity (0.5 is half speed)
+          await Tts.setDefaultRate(0.45);
+          
+          // Set pitch slightly higher for better audibility for seniors
+          await Tts.setDefaultPitch(1.1);
+        } else if (Platform.OS === 'ios') {
+          // iOS-specific settings
+          await Tts.setDefaultRate(0.45);
+          await Tts.setDefaultPitch(1.1);
+        }
+        
+        // Set language to English for announcement
+        await Tts.setDefaultLanguage('en-US');
+        console.log('TTS settings configured successfully');
+      } catch (ttsSetupError) {
+        console.error('Error setting up TTS:', ttsSetupError);
+      }
+      
+      // Add a small delay to ensure TTS is ready
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Speak the announcement three times to ensure it's heard
+      for (let i = 0; i < 3; i++) {
+        console.log(`Speaking announcement (attempt ${i+1}/3)`);
+        Tts.speak(announcementText);
+        
+        // Wait between announcements
+        if (i < 2) {
+          await new Promise(resolve => setTimeout(resolve, 5000));
+        }
+      }
+      
+      console.log('Pill reminder announcement completed');
+    } catch (error) {
+      console.error('Error announcing pill reminder:', error);
+      
+      // Fallback attempt with simpler settings if the first attempt failed
+      try {
+        console.log('Attempting fallback pill announcement');
+        await Tts.setDefaultLanguage('en-US');
+        Tts.speak(`Time to take your ${medicineName}.`);
+        
+        // Wait 3 seconds and try again
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        Tts.speak(`Time to take your ${medicineName}.`);
+      } catch (fallbackError) {
+        console.error('Fallback announcement also failed:', fallbackError);
+      }
+    }
+  },
+
+  /**
+   * Test the audio announcement feature
+   */
+  testPillAnnouncement: async (medicineName: string = 'Test Medicine'): Promise<void> => {
+    try {
+      console.log('Testing pill announcement');
+      await notificationService.announcePillReminder(medicineName);
+      console.log('Pill announcement test completed');
+    } catch (error) {
+      console.error('Error testing pill announcement:', error);
+    }
+  },
+
   /**
    * Request notification permissions
    */
@@ -159,35 +272,107 @@ export const notificationService = {
    */
   initialize: async () => {
     try {
+      console.log('Initializing notification service with voice support...');
+      
       // Set up notification channels
       await notificationService.setupNotificationChannels();
       
       // Check for and schedule any pending notifications
       await notificationService.processPendingNotifications();
       
-      // Set up notification received handler
-      const subscription1 = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
-        console.log('Notification received:', notification);
-      });
+      // Initialize TTS
+      try {
+        console.log('Initializing Text-to-Speech engine');
+        // Pre-initialize TTS for faster response when needed
+        await Tts.setDefaultLanguage('en-US');
+        
+        // Set speech rate slightly slower for clarity
+        if (Platform.OS === 'android') {
+          await Tts.setDefaultEngine('com.google.android.tts');
+          await Tts.setDefaultRate(0.45);
+          await Tts.setDefaultPitch(1.1);
+        } else if (Platform.OS === 'ios') {
+          await Tts.setDefaultRate(0.45);
+          await Tts.setDefaultPitch(1.1);
+        }
+        
+        // Add TTS event listeners for debugging
+        Tts.addEventListener('tts-start', () => console.log('TTS started speaking'));
+        Tts.addEventListener('tts-finish', () => console.log('TTS finished speaking'));
+        Tts.addEventListener('tts-cancel', () => console.log('TTS speaking cancelled'));
+        Tts.addEventListener('tts-error', (event) => console.error('TTS error:', event));
+        
+        console.log('TTS engine initialized successfully');
+      } catch (ttsError) {
+        console.error('Failed to initialize TTS:', ttsError);
+      }
       
-      // Set up notification response handler
-      const subscription2 = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
-        console.log('Notification response received:', response);
-        const { notification } = response;
-        // Handle user interaction with notification
-        if (notification.request.content.data) {
+      // Set up notification received handler - THIS WILL HANDLE FOREGROUND AUDIO ANNOUNCEMENTS
+      const subscription1 = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
+        console.log('Notification received in foreground:', notification.request.identifier);
+        
+        // Check if this is a pill reminder and announce it
+        try {
           const data = notification.request.content.data;
-          console.log('Notification data:', data);
-          // You can dispatch actions or navigate based on the data
+          console.log('Notification data content:', JSON.stringify(data));
+          
+          if (data && typeof data === 'object' && data.type === 'pill-reminder') {
+            console.log('Pill reminder notification received, announcing medicine:', data.medicineName);
+            const medicineName = data.medicineName || 'medicine';
+            
+            // Play audio announcement immediately for foreground notifications
+            notificationService.announcePillReminder(medicineName);
+          } else {
+            console.log('Not a pill reminder notification or missing data');
+          }
+        } catch (error) {
+          console.error('Error processing notification data:', error);
         }
       });
       
-      console.log('Notification service initialized');
+      // Set up notification response handler - THIS WILL HANDLE BACKGROUND NOTIFICATIONS WHEN TAPPED
+      const subscription2 = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
+        console.log('Notification response received, ID:', response.notification.request.identifier);
+        const { notification } = response;
+        
+        try {
+          // Handle user interaction with notification
+          if (notification.request.content.data) {
+            const data = notification.request.content.data;
+            console.log('Notification response data:', JSON.stringify(data));
+            
+            // Check if this is a pill reminder and announce it (for notifications that arrive when app is in background)
+            if (data && typeof data === 'object' && data.type === 'pill-reminder') {
+              console.log('Pill reminder response received, announcing medicine:', data.medicineName);
+              const medicineName = data.medicineName || 'medicine';
+              
+              // Play audio announcement when user taps the notification
+              notificationService.announcePillReminder(medicineName);
+            } else {
+              console.log('Not a pill reminder notification response or missing data');
+            }
+          } else {
+            console.log('No data in notification response');
+          }
+        } catch (error) {
+          console.error('Error processing notification response:', error);
+        }
+      });
+      
+      console.log('Notification service initialized with all handlers');
       
       // Return a cleanup function (can be used if needed)
       return () => {
         subscription1.remove();
         subscription2.remove();
+        
+        // Clean up TTS listeners
+        Tts.removeAllListeners('tts-start');
+        Tts.removeAllListeners('tts-finish');
+        Tts.removeAllListeners('tts-cancel');
+        Tts.removeAllListeners('tts-error');
+        
+        console.log('Notification service cleaned up');
       };
     } catch (error) {
       console.error('Error initializing notification service:', error);
@@ -345,7 +530,48 @@ export const notificationService = {
       console.error('Error getting scheduled notifications:', error);
       return [];
     }
-  }
+  },
+
+  /**
+   * Initialize TTS engine separately to ensure it's ready for announcements
+   */
+  initializeTts: async (): Promise<boolean> => {
+    try {
+      console.log('Initializing Text-to-Speech engine');
+      
+      // Force stop any previous TTS that might be running
+      Tts.stop();
+      
+      // Set language to English
+      await Tts.setDefaultLanguage('en-US');
+      
+      // Configure TTS settings based on platform
+      if (Platform.OS === 'android') {
+        // For Android, we need to set the engine
+        await Tts.setDefaultEngine('com.google.android.tts');
+        console.log('Set TTS engine for Android');
+        
+        // Set speech rate slightly slower for clarity
+        await Tts.setDefaultRate(0.45);
+        
+        // Set pitch slightly higher for better audibility for seniors
+        await Tts.setDefaultPitch(1.1);
+      } else if (Platform.OS === 'ios') {
+        // iOS-specific settings
+        await Tts.setDefaultRate(0.45);
+        await Tts.setDefaultPitch(1.1);
+      }
+      
+      // Speak a silent message to fully initialize the engine
+      Tts.speak(' ');
+      
+      console.log('TTS engine initialized successfully');
+      return true;
+    } catch (error) {
+      console.error('Error initializing TTS engine:', error);
+      return false;
+    }
+  },
 };
 
 // Helper functions for managing notification IDs

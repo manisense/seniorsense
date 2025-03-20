@@ -13,6 +13,7 @@ import { View, Text, ActivityIndicator, StyleSheet } from 'react-native';
 import { authService } from './services/auth.service';
 import { notificationService } from './services/notificationService';
 import { reminderSyncService } from './services/reminderSyncService';
+import { pillReminderBackgroundService } from './services/pillReminderBackgroundService';
 
 /**
  * Main app initialization component
@@ -34,6 +35,10 @@ const AppInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) =
         // Initialize notification service
         await notificationService.initialize();
         console.log('Notification service initialized');
+        
+        // Initialize pill reminder background service
+        const backgroundServiceResult = await pillReminderBackgroundService.registerBackgroundTask();
+        console.log('Pill reminder background service initialized:', backgroundServiceResult ? 'success' : 'failed');
         
         // Check and verify current session
         if (auth.isAuthenticated) {
