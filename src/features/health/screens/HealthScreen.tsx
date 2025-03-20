@@ -1,399 +1,537 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, StyleSheet, View, TouchableOpacity } from 'react-native';
-import { Text, Card, Button, IconButton, TextInput, Surface } from 'react-native-paper';
-import { useTheme } from '../../../context/ThemeContext';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { Text, Searchbar, FAB, Card, ActivityIndicator, DefaultTheme, PaperProvider } from 'react-native-paper';
 import { useTranslation } from '../../../hooks/useTranslation';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { VitalReading, HealthInsight } from '../types/health.types';
-import { STORAGE_KEYS } from '../constants';
-import { CustomDialog } from '../../../components/CustomDialog';
-import { VitalTrendGraph } from '../components/VitalTrendGraph';
-import { Share } from 'react-native';
-import * as FileSystem from 'expo-file-system';
-import { format } from 'date-fns';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../../navigation/types';
+import { medicineHistoryService, MedicineHistoryItem } from '../../../services/supabase';
+import { useAuth } from '../../../context/AuthContext';
+
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
+// Create a custom theme that doesn't rely on level3
+const customTheme = {
+  ...DefaultTheme,
+  colors: {
+    ...DefaultTheme.colors,
+    primary: '#2563EB',
+    background: '#F5F5F5',
+    surface: '#FFFFFF',
+    surfaceVariant: '#F1F5F9',
+    text: '#1E293B',
+    outline: '#E5E7EB',
+    onSurface: '#1E293B',
+    secondary: '#64748B',
+    error: '#EF4444',
+  },
+};
 
 export const HealthScreen = () => {
-  const { theme } = useTheme();
   const { t } = useTranslation();
-  const [showAddDialog, setShowAddDialog] = useState(false);
-  const [selectedVital, setSelectedVital] = useState<'bloodPressure' | 'heartRate' | null>(null);
-  const [readings, setReadings] = useState<VitalReading[]>([]);
-  const [insights, setInsights] = useState<HealthInsight[]>([]);
-  const [newReading, setNewReading] = useState({
-    systolic: '',
-    diastolic: '',
-    heartRate: '',
-    timestamp: new Date()
-  });
-  const [selectedPeriod, setSelectedPeriod] = useState<'week' | 'month' | 'year'>('week');
-  const [showTrends, setShowTrends] = useState(false);
+  const navigation = useNavigation<NavigationProp>();
+  const { user } = useAuth();
+  
+  const [medicineHistory, setMedicineHistory] = useState<MedicineHistoryItem[]>([]);
+  const [filteredHistory, setFilteredHistory] = useState<MedicineHistoryItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
 
   useEffect(() => {
-    loadHealthData();
-  }, []);
+    checkAuthStatus();
+  }, [user]);
 
-  const loadHealthData = async () => {
-    try {
-      const storedData = await AsyncStorage.getItem(STORAGE_KEYS.HEALTH_DATA);
-      if (storedData) {
-        const { vitals, insights } = JSON.parse(storedData);
-        setReadings(vitals);
-        setInsights(insights);
+  useEffect(() => {
+    if (isLoggedIn) {
+      loadMedicineHistory();
+    }
+  }, [isLoggedIn]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (isLoggedIn) {
+        loadMedicineHistory();
       }
+    });
+    
+    return unsubscribe;
+  }, [navigation, isLoggedIn]);
+
+  const checkAuthStatus = () => {
+    setIsLoggedIn(!!user);
+  };
+
+  const loadMedicineHistory = async () => {
+    if (!isLoggedIn) return;
+    
+    setLoading(true);
+    try {
+      const data = await medicineHistoryService.getMedicineHistory();
+      setMedicineHistory(data);
+      setFilteredHistory(data);
+      
+      // Extract unique medicine names for auto-suggest feature
+      const uniqueNames = Array.from(new Set(data.map(item => item.medicine_name)));
+      setSuggestions(uniqueNames);
     } catch (error) {
-      console.error('Error loading health data:', error);
+      console.error('Error loading medicine history:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const handleAddReading = async () => {
-    const newVitalReading: VitalReading = {
-      id: Date.now().toString(),
-      timestamp: newReading.timestamp,
-      type: selectedVital!,
-      value: selectedVital === 'bloodPressure' 
-        ? { 
-            systolic: parseInt(newReading.systolic), 
-            diastolic: parseInt(newReading.diastolic) 
-          }
-        : parseInt(newReading.heartRate),
+  const handleRefresh = async () => {
+    if (!isLoggedIn) return;
+    
+    setRefreshing(true);
+    await loadMedicineHistory();
+    setRefreshing(false);
+  };
+
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    
+    // Show suggestions as user types
+    if (query.length > 0) {
+      const matchingSuggestions = suggestions.filter(name => 
+        name.toLowerCase().includes(query.toLowerCase())
+      );
+      setSuggestions(matchingSuggestions);
+      setShowSuggestions(matchingSuggestions.length > 0);
+    } else {
+      setShowSuggestions(false);
+    }
+    
+    // Filter the history items
+    if (!query.trim()) {
+      setFilteredHistory(medicineHistory);
+      return;
+    }
+
+    const filtered = medicineHistory.filter(item => 
+      item.medicine_name.toLowerCase().includes(query.toLowerCase()) ||
+      (item.response_text && item.response_text.toLowerCase().includes(query.toLowerCase()))
+    );
+    setFilteredHistory(filtered);
+  };
+
+  const handleSelectSuggestion = (suggestion: string) => {
+    setSearchQuery(suggestion);
+    setShowSuggestions(false);
+    
+    const filtered = medicineHistory.filter(item => 
+      item.medicine_name.toLowerCase().includes(suggestion.toLowerCase())
+    );
+    setFilteredHistory(filtered);
+  };
+
+  const handleNavigateToMedicineIdentifier = () => {
+    navigation.navigate('MedicineIdentifier');
+  };
+
+  const handleViewMedicineDetail = (id: string) => {
+    navigation.navigate('MedicineHistoryDetail', { id });
+  };
+
+  const formatHistoryDate = (dateString: string) => {
+    try {
+      const now = new Date();
+      const date = new Date(dateString);
+      
+      const diffHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+      
+      if (diffHours < 24) {
+        return `${diffHours}h ago`;
+      } else {
+        const diffDays = Math.floor(diffHours / 24);
+        return `${diffDays}d ago`;
+      }
+    } catch (e) {
+      return dateString;
+    }
+  };
+
+  const renderMedicineItem = ({ item }: { item: MedicineHistoryItem }) => {
+    // Define shadow styles with direct values to avoid level3 issues
+    const shadowStyle = {
+      shadowColor: 'rgba(0, 0, 0, 0.1)',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 3.84,
+      elevation: 3,
     };
 
-    const updatedReadings = [...readings, newVitalReading];
-    setReadings(updatedReadings);
-    await AsyncStorage.setItem(STORAGE_KEYS.HEALTH_DATA, JSON.stringify({
-      vitals: updatedReadings,
-      insights,
-      lastUpdate: new Date()
-    }));
-
-    setShowAddDialog(false);
-    setNewReading({ systolic: '', diastolic: '', heartRate: '', timestamp: new Date() });
+    return (
+      <Card 
+        style={[
+          styles.medicineCard, 
+          shadowStyle
+        ]}
+        onPress={() => handleViewMedicineDetail(item.id)}
+      >
+        <Card.Content>
+          <View style={styles.medicineItemRow}>
+            <View style={styles.pillIconContainer}>
+              <MaterialCommunityIcons name="pill" size={28} color="#333" />
+            </View>
+            <View style={styles.medicineTextContainer}>
+              <Text style={styles.medicineName}>
+                {item.medicine_name}
+              </Text>
+              <Text style={styles.medicineDate}>
+                Searched {formatHistoryDate(item.created_at)}
+              </Text>
+            </View>
+          </View>
+        </Card.Content>
+      </Card>
+    );
   };
 
-  const generateHealthReport = async () => {
-    const csvContent = readings.map(reading => {
-      const date = format(new Date(reading.timestamp), 'yyyy-MM-dd HH:mm');
-      if (reading.type === 'bloodPressure') {
-        const bp = reading.value as { systolic: number; diastolic: number };
-        return `${date},${reading.type},${bp.systolic}/${bp.diastolic}`;
-      }
-      return `${date},${reading.type},${reading.value}`;
-    }).join('\n');
+  const renderLoginMessage = () => (
+    <View style={styles.loginContainer}>
+      <MaterialCommunityIcons 
+        name="account-lock" 
+        size={64} 
+        color={customTheme.colors.primary} 
+        style={styles.loginIcon}
+      />
+      <Text style={styles.loginTitle}>
+        {t('auth.signInRequired')}
+      </Text>
+      <Text style={styles.loginMessage}>
+        {t('medicineIdentifier.loginToViewHistory')}
+      </Text>
+      <TouchableOpacity 
+        style={[styles.loginButton, { backgroundColor: customTheme.colors.primary }]}
+        onPress={() => navigation.navigate('Profile')}
+      >
+        <Text style={[styles.loginButtonText, { color: '#FFFFFF' }]}>
+          {t('auth.signIn')}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
 
-    const header = 'Date,Type,Value\n';
-    const filePath = `${FileSystem.documentDirectory}health_report.csv`;
-    
-    try {
-      await FileSystem.writeAsStringAsync(filePath, header + csvContent);
-      await Share.share({
-        url: filePath,
-        title: 'Health Report'
-      });
-    } catch (error) {
-      console.error('Error exporting health data:', error);
-    }
-  };
+  const renderEmptyList = () => (
+    <View style={styles.emptyContainer}>
+      <MaterialCommunityIcons 
+        name="pill"
+        size={64} 
+        color={customTheme.colors.secondary} 
+        style={styles.emptyIcon}
+      />
+      <Text style={styles.emptyText}>
+        {searchQuery ? t('medicineIdentifier.noResultsFound') : t('medicineIdentifier.historyEmpty')}
+      </Text>
+      <Text style={styles.emptySubtext}>
+        {t('medicineIdentifier.identifyToAddHistory')}
+      </Text>
+      <TouchableOpacity 
+        style={[styles.scanButton, { backgroundColor: customTheme.colors.primary }]}
+        onPress={handleNavigateToMedicineIdentifier}
+      >
+        <MaterialCommunityIcons name="camera" size={24} color="#FFFFFF" />
+        <Text style={[styles.scanButtonText, { color: '#FFFFFF' }]}>
+          {t('medicineIdentifier.scan')}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+
+  if (!isLoggedIn) {
+    return (
+      <PaperProvider theme={customTheme}>
+        <View style={styles.container}>
+          {renderLoginMessage()}
+        </View>
+      </PaperProvider>
+    );
+  }
 
   return (
-    <ScrollView 
-      style={[styles.container, { backgroundColor: theme.colors.background }]}
-      contentContainerStyle={styles.content}
-    >
-      {/* Vitals Cards */}
-      <View style={styles.vitalsContainer}>
-        <Card style={[styles.vitalCard, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.vitalHeader}>
-              <MaterialCommunityIcons name="heart-pulse" size={24} color={theme.colors.error} />
-              <Text variant="titleMedium" style={{ color: theme.colors.text }}>
-                {t('health.bloodPressure')}
-              </Text>
-            </View>
-            <TextInput
-              value="-/-"
-              editable={false}
-              style={[styles.vitalInput, { backgroundColor: 'transparent' }]}
-            />
-            <View style={styles.inputGroup}>
-              <TextInput
-                placeholder={t('health.systolic')}
-                style={styles.halfInput}
-                keyboardType="numeric"
-              />
-              <Text style={{ color: theme.colors.text }}>/</Text>
-              <TextInput
-                placeholder={t('health.diastolic')}
-                style={styles.halfInput}
-                keyboardType="numeric"
-              />
-            </View>
-            <Button
-              mode="contained"
-              onPress={() => {
-                setSelectedVital('bloodPressure');
-                setShowAddDialog(true);
-              }}
-              style={styles.addButton}
-            >
-              {t('health.addReading')}
-            </Button>
-            <TouchableOpacity style={styles.editButton}>
-              <Text style={{ color: theme.colors.primary }}>{t('common.edit')}</Text>
-            </TouchableOpacity>
-          </Card.Content>
-        </Card>
-
-        <Card style={[styles.card, { backgroundColor: theme.colors.surface }]}>
-            <Card.Title
-              title={t('sos.medicalInfo')}
-              titleStyle={{ color: theme.colors.text }}
-              left={props => (
-                <MaterialCommunityIcons
-                  {...props}
-                  name="medical-bag"
-                  color={theme.colors.primary}
-                />
-              )}
-            />
-            <Card.Content>
-              <Text style={{ color: theme.colors.textSecondary }}>
-                {t('sos.allergies')}:
-              </Text>
-              <Text style={{ color: theme.colors.text, marginBottom: 8 }}>
-                {/* Add medical info handling */}
-                {t('sos.noAllergies')}
-              </Text>
-
-              <Text style={{ color: theme.colors.textSecondary }}>
-                {t('sos.conditions')}:
-              </Text>
-              <Text style={{ color: theme.colors.text, marginBottom: 8 }}>
-                {/* Add medical info handling */}
-                {t('sos.noConditions')}
-              </Text>
-            </Card.Content>
-          </Card>
-      </View>
-
-      {/* AI Health Insights */}
-      <Card style={[styles.insightsCard, { backgroundColor: theme.colors.surface }]}>
-        <Card.Content>
-          <View style={styles.insightsHeader}>
-            <Text variant="titleMedium" style={{ color: theme.colors.text }}>
-              {t('health.aiInsights')}
-            </Text>
-            <Text variant="bodySmall" style={{ color: theme.colors.secondary }}>
-              {t('health.updatedAgo', { time: '2h' })}
-            </Text>
-          </View>
+    <PaperProvider theme={customTheme}>
+      <View style={styles.container}>
+        <View style={styles.searchContainer}>
+          <Searchbar
+            placeholder={t('medicineIdentifier.searchMedicines')}
+            onChangeText={handleSearch}
+            value={searchQuery}
+            style={styles.searchBar}
+            inputStyle={{ color: customTheme.colors.text }}
+            iconColor={customTheme.colors.primary}
+          />
           
-          {insights.map((insight, index) => (
-            <View key={index} style={styles.insightItem}>
-              <MaterialCommunityIcons
-                name={insight.type === 'success' ? 'check-circle' : 'alert-circle'}
-                size={24}
-                color={insight.type === 'success' ? theme.colors.primary : theme.colors.warning}
-              />
-              <Text style={[styles.insightText, { color: theme.colors.text }]}>
-                {insight.message}
-              </Text>
-            </View>
-          ))}
-          
-          <Button
-            mode="contained"
-            onPress={() => {/* Generate new insights */}}
-            style={styles.generateButton}
-          >
-            {t('health.generateInsights')}
-          </Button>
-        </Card.Content>
-      </Card> 
-
-      {/* Add Reading Dialog */}
-      <CustomDialog
-        visible={showAddDialog}
-        onDismiss={() => setShowAddDialog(false)}
-        title={t('health.addReading')}
-        content={
-          <View>
-            {selectedVital === 'bloodPressure' ? (
-              <View style={styles.dialogInputGroup}>
-                <TextInput
-                  label={t('health.systolic')}
-                  value={newReading.systolic}
-                  onChangeText={(text) => setNewReading(prev => ({ ...prev, systolic: text }))}
-                  keyboardType="numeric"
-                  style={styles.dialogInput}
-                />
-                <TextInput
-                  label={t('health.diastolic')}
-                  value={newReading.diastolic}
-                  onChangeText={(text) => setNewReading(prev => ({ ...prev, diastolic: text }))}
-                  keyboardType="numeric"
-                  style={styles.dialogInput}
-                />
-              </View>
-            ) : (
-              <TextInput
-                label={t('health.heartRate')}
-                value={newReading.heartRate}
-                onChangeText={(text) => setNewReading(prev => ({ ...prev, heartRate: text }))}
-                keyboardType="numeric"
-                style={styles.dialogInput}
-              />
-            )}
-          </View>
-        }
-        actions={[
-          {
-            label: t('common.cancel'),
-            onPress: () => setShowAddDialog(false)
-          },
-          {
-            label: t('common.save'),
-            onPress: handleAddReading
-          }
-        ]}
-      />
-
-      {showTrends && (
-        <Card style={[styles.trendCard, { backgroundColor: theme.colors.surface }]}>
-          <Card.Content>
-            <View style={styles.trendHeader}>
-              <Text variant="titleMedium" style={{ color: theme.colors.text }}>
-                {t('health.trends')}
-              </Text>
-              <View style={styles.periodSelector}>
-                {['week', 'month', 'year'].map((period) => (
-                  <TouchableOpacity
-                    key={period}
-                    onPress={() => setSelectedPeriod(period as 'week' | 'month' | 'year')}
-                    style={[
-                      styles.periodButton,
-                      selectedPeriod === period && { backgroundColor: theme.colors.primaryContainer }
-                    ]}
+          {/* Auto-suggest dropdown */}
+          {showSuggestions && (
+            <Card style={styles.suggestionsCard}>
+              <FlatList
+                data={suggestions}
+                keyExtractor={(item: string) => item}
+                renderItem={({ item }: { item: string }) => (
+                  <TouchableOpacity 
+                    style={styles.suggestionItem}
+                    onPress={() => handleSelectSuggestion(item)}
                   >
-                    <Text style={{ color: theme.colors.text }}>
-                      {t(`health.period.${period}`)}
-                    </Text>
+                    <Text>{item}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-            <VitalTrendGraph
-              readings={readings}
-              type={selectedVital || 'bloodPressure'}
-              period={selectedPeriod}
-            />
-          </Card.Content>
-        </Card>
-      )}
+                )}
+              />
+            </Card>
+          )}
+        </View>
 
-      {/* Export Data Button */}
-      <Button
-        mode="outlined"
-        onPress={generateHealthReport}
-        style={[styles.exportButton, { backgroundColor: theme.colors.surface }]}
-        icon="file-export"
-      >
-        {t('health.exportData')}
-      </Button>
-    </ScrollView>
+        <View style={styles.identifierCard}>
+          <View style={styles.identifierTextContainer}>
+            <Text style={styles.identifierTitle}>
+              Identify Your Medicine
+            </Text>
+            <Text style={styles.identifierSubtitle}>
+              Scan or take a photo of your medicine
+            </Text>
+          </View>
+          <TouchableOpacity 
+            style={[styles.cameraButton, { backgroundColor: customTheme.colors.primary }]}
+            onPress={handleNavigateToMedicineIdentifier}
+          >
+            <MaterialCommunityIcons name="camera" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={customTheme.colors.primary} />
+            <Text style={styles.loadingText}>
+              {t('medicineIdentifier.loadingHistory')}
+            </Text>
+          </View>
+        ) : (
+          <>
+            {filteredHistory.length > 0 ? (
+              <FlatList
+                data={filteredHistory}
+                renderItem={renderMedicineItem}
+                keyExtractor={item => item.id}
+                contentContainerStyle={styles.listContent}
+                showsVerticalScrollIndicator={false}
+                refreshControl={
+                  <RefreshControl 
+                    refreshing={refreshing} 
+                    onRefresh={handleRefresh}
+                    colors={[customTheme.colors.primary]}
+                  />
+                }
+              />
+            ) : (
+              renderEmptyList()
+            )}
+          </>
+        )}
+
+        <FAB
+          icon="camera"
+          style={[
+            styles.fab, 
+            { 
+              backgroundColor: customTheme.colors.primary,
+              // Avoid level3 by using direct shadow values
+              shadowColor: 'rgba(0, 0, 0, 0.1)',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 3.84,
+              elevation: 4,
+            }
+          ]}
+          onPress={handleNavigateToMedicineIdentifier}
+          color="#FFFFFF"
+        />
+      </View>
+    </PaperProvider>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#F5F5F5',
   },
-  content: {
+  searchContainer: {
+    padding: 16,
+    position: 'relative',
+    zIndex: 10,
+  },
+  searchBar: {
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+  },
+  suggestionsCard: {
+    position: 'absolute',
+    top: 70,
+    left: 16,
+    right: 16,
+    zIndex: 20,
+    maxHeight: 200,
+    backgroundColor: '#FFFFFF',
+  },
+  suggestionItem: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  identifierCard: {
+    marginHorizontal: 16,
+    marginBottom: 20,
+    padding: 20,
+    backgroundColor: '#000000',
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  identifierTextContainer: {
+    flex: 1,
+  },
+  identifierTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+  },
+  identifierSubtitle: {
+    fontSize: 14,
+    marginTop: 4,
+    color: '#DDDDDD',
+  },
+  cameraButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  listContent: {
+    padding: 16,
+    paddingTop: 8,
+    paddingBottom: 80,
+  },
+  medicineCard: {
+    marginBottom: 16,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+  },
+  medicineItemRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  pillIconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#F3F4F6',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  medicineTextContainer: {
+    flex: 1,
+  },
+  medicineName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#1E293B',
+  },
+  medicineDate: {
+    fontSize: 14,
+    marginTop: 4,
+    color: '#64748B',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#1E293B',
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
     padding: 16,
   },
-  vitalsContainer: {
-    flexDirection: 'column',
-    gap: 16,
-  },
-  vitalCard: {
+  emptyIcon: {
     marginBottom: 16,
+    opacity: 0.6,
   },
-  vitalHeader: {
+  emptyText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    marginBottom: 8,
+    color: '#64748B',
+  },
+  emptySubtext: {
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#64748B',
+  },
+  scanButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  vitalInput: {
-    marginVertical: 8,
-  },
-  inputGroup: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
     gap: 8,
   },
-  halfInput: {
+  scanButtonText: {
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+  fab: {
+    position: 'absolute',
+    margin: 16,
+    right: 0,
+    bottom: 0,
+    borderRadius: 28,
+  },
+  loginContainer: {
     flex: 1,
-  },
-  addButton: {
-    marginTop: 12,
-  },
-  editButton: {
-    alignSelf: 'flex-end',
-    marginTop: 8,
-  },
-  insightsCard: {
-    marginTop: 16,
-  },
-  card: {
-    marginBottom: 16,
-    elevation: 2,
-  },
-  insightsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     alignItems: 'center',
+    padding: 24,
+  },
+  loginIcon: {
     marginBottom: 16,
   },
-  insightItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 12,
+  loginTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textAlign: 'center',
+    color: '#1E293B',
   },
-  insightText: {
-    flex: 1,
+  loginMessage: {
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 24,
+    color: '#64748B',
   },
-  generateButton: {
-    marginTop: 16,
+  loginButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
   },
-  dialogInputGroup: {
-    gap: 12,
+  loginButtonText: {
+    fontWeight: 'bold',
+    fontSize: 16,
   },
-  dialogInput: {
-    marginBottom: 12,
-  },
-  trendCard: {
-    marginTop: 16,
-  },
-  trendHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  periodSelector: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  periodButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  exportButton: {
-    marginTop: 16,
-  }
 });
 
 export default HealthScreen;
