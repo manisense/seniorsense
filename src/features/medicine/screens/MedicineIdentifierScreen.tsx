@@ -456,8 +456,9 @@ const MedicineIdentifierScreen = () => {
 
   // Apply selected language
   const applyLanguage = () => {
-    setLocale(selectedLanguage);
+    // Only close the dialog without updating the app's locale
     setShowLanguageDialog(false);
+    // Don't call setLocale() here to avoid changing the app's language
   };
 
   // View history
