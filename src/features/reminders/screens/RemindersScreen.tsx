@@ -1150,14 +1150,14 @@ const RemindersScreen: React.FC = (): ReactElement => {
   const runDebugSync = async () => {
     // Show a sync dialog
     Alert.alert(
-      'Sync Debug',
-      'Running sync diagnostics...',
+      t('reminders.debug.syncDebug'),
+      t('reminders.debug.connectionTest'),
       [{ text: 'OK', onPress: async () => {
         try {
           // Check connectivity
           const connected = await isConnected();
           if (!connected) {
-            Alert.alert('Sync Debug', 'Device is offline. Please connect to the internet and try again.');
+            Alert.alert(t('reminders.debug.syncDebug'), t('reminders.debug.networkOffline'));
             return;
           }
           
@@ -1168,8 +1168,8 @@ const RemindersScreen: React.FC = (): ReactElement => {
           if (!sessionValid) {
             console.error('Session verification failed - session is invalid and could not be refreshed');
             Alert.alert(
-              'Authentication Error', 
-              'Your authentication session is invalid and could not be refreshed. Please try signing out and signing back in to fix this issue.'
+              t('auth.error'), 
+              t('auth.sessionInvalid')
             );
             return;
           }
@@ -1179,10 +1179,10 @@ const RemindersScreen: React.FC = (): ReactElement => {
           // Check authentication status first with our enhanced method
           console.log('Checking authentication status with authService.isAuthenticated()...');
           const isAuth = await authService.isAuthenticated();
-          console.log('Authentication status:', isAuth ? 'Authenticated ✅' : 'Not authenticated ❌');
+          console.log('Authentication status:', isAuth ? t('reminders.debug.authenticated') : t('reminders.debug.notAuthenticated'));
           
           if (!isAuth) {
-            Alert.alert('Sync Debug', 'User is not authenticated according to authService. Please sign in to sync reminders.');
+            Alert.alert(t('reminders.debug.syncDebug'), t('auth.notAuthenticated'));
             return;
           }
           
@@ -1202,52 +1202,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           
           if (sessionError) {
             console.error('Session error:', sessionError);
-            Alert.alert('Session Error', `Error getting session: ${sessionError.message}`);
-            return;
-          }
-          
-          // Log session details for debugging
-          if (sessionData.session) {
-            const expiresAt = new Date(sessionData.session.expires_at! * 1000);
-            const now = new Date();
-            const isExpired = now > expiresAt;
-            
-            console.log('Session details:');
-            console.log('- User:', sessionData.session.user.email);
-            console.log('- Expires at:', expiresAt.toLocaleString());
-            console.log('- Is expired:', isExpired ? 'Yes ❌' : 'No ✅');
-            console.log('- Access token (first 20 chars):', sessionData.session.access_token.substring(0, 20) + '...');
-            console.log('- Refresh token exists:', !!sessionData.session.refresh_token);
-          } else {
-            console.log('No active session found, attempting to refresh...');
-            Alert.alert(
-              'Session Warning', 
-              'No active session found despite successful verification. This is unexpected behavior. Try signing out and back in.'
-            );
-            return;
-          }
-          
-          // Check Supabase connection with detailed error info
-          try {
-            console.log('Testing database connection...');
-            const { data, error } = await supabase.from('reminders').select('count').limit(1);
-            if (error) {
-              console.error('Supabase query error:', error);
-              
-              // Check for specific error types
-              if (error.message.includes('JWT expired')) {
-                Alert.alert('Authentication Error', 'Your session token has expired. Please log out and log in again.');
-              } else if (error.message.includes('Authentication failed')) {
-                Alert.alert('Authentication Error', 'Authentication failed when connecting to Supabase. Please log out and log in again.');
-              } else {
-                Alert.alert('Supabase Error', `Failed to connect to Supabase: ${error.message}`);
-              }
-              return;
-            }
-            console.log('Supabase connection test successful:', data);
-          } catch (err) {
-            console.error('Exception during Supabase connection test:', err);
-            Alert.alert('Supabase Error', `Exception when connecting to Supabase: ${err instanceof Error ? err.message : String(err)}`);
+            Alert.alert(t('auth.sessionError'), `${sessionError.message}`);
             return;
           }
           
@@ -1259,7 +1214,7 @@ const RemindersScreen: React.FC = (): ReactElement => {
           // Try sync with additional logging
           console.log('Starting reminder sync process...');
           const syncResult = await reminderService.syncReminders();
-          console.log('Sync process completed with result:', syncResult ? 'Success ✅' : 'Failure ❌');
+          console.log('Sync process completed with result:', syncResult ? t('reminders.debug.syncSuccess') : t('reminders.debug.syncFailed'));
           
           // Get updated stats after sync
           const updatedStats = await reminderService.getSyncStats();
@@ -1267,23 +1222,23 @@ const RemindersScreen: React.FC = (): ReactElement => {
           
           // Show results
           Alert.alert(
-            'Sync Results', 
-            `Sync ${syncResult ? 'successful ✅' : 'failed ❌'}\n\n` +
-            `Before sync:\n` +
-            `Total: ${stats.total}\n` +
-            `Synced: ${stats.synced}\n` +
-            `Pending: ${stats.pending}\n` +
-            `Error: ${stats.error}\n\n` +
-            `After sync:\n` +
-            `Total: ${updatedStats.total}\n` +
-            `Synced: ${updatedStats.synced}\n` +
-            `Pending: ${updatedStats.pending}\n` +
-            `Error: ${updatedStats.error}\n\n` +
-            `Run this again to try syncing any remaining reminders.`
+            t('reminders.debug.syncResults'), 
+            `${syncResult ? t('reminders.debug.syncSuccess') : t('reminders.debug.syncFailed')}\n\n` +
+            `${t('reminders.debug.beforeSync')}\n` +
+            `${t('reminders.debug.total')}: ${stats.total}\n` +
+            `${t('reminders.debug.synced')}: ${stats.synced}\n` +
+            `${t('reminders.debug.pending')}: ${stats.pending}\n` +
+            `${t('reminders.debug.errors')}: ${stats.error}\n\n` +
+            `${t('reminders.debug.afterSync')}\n` +
+            `${t('reminders.debug.total')}: ${updatedStats.total}\n` +
+            `${t('reminders.debug.synced')}: ${updatedStats.synced}\n` +
+            `${t('reminders.debug.pending')}: ${updatedStats.pending}\n` +
+            `${t('reminders.debug.errors')}: ${updatedStats.error}\n\n` +
+            `${t('reminders.debug.runAgain')}`
           );
         } catch (err) {
           console.error('Exception during debug sync process:', err);
-          Alert.alert('Sync Error', `Exception during sync process: ${err instanceof Error ? err.message : String(err)}`);
+          Alert.alert(t('reminders.error'), `${err instanceof Error ? err.message : String(err)}`);
         }
       }}]
     );
@@ -1298,82 +1253,166 @@ const RemindersScreen: React.FC = (): ReactElement => {
     );
   };
 
-  const testAuthStatus = async () => {
-    try {
-      console.log('Checking authentication status with authService.isAuthenticated()...');
-      const isAuthenticated = await authService.isAuthenticated();
-      console.log(`Authentication status: ${isAuthenticated ? 'Authenticated ✅' : 'Not authenticated ❌'}`);
-      
-      // Get detailed session info
-      console.log('Getting detailed session information...');
-      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-      
-      if (sessionError) {
-        console.error('Session error:', sessionError);
-        showAlert('Authentication Error', `Session error: ${sessionError.message}`);
-        return;
-      }
-      
-      if (!sessionData.session) {
-        console.log('No active session found, attempting to refresh...');
-        
+  const testSupabase = async () => {
+    Alert.alert(
+      t('reminders.debug.testSupabase'),
+      t('reminders.debug.connectionTest'),
+      [{ text: 'OK', onPress: async () => {
         try {
-          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-          
-          if (refreshError) {
-            console.error('Session refresh error:', refreshError);
-            
-            // Special handling for AuthSessionMissingError
-            if (refreshError.message.includes('Auth session missing')) {
-              console.error('AuthSessionMissingError detected - this might require logging out and back in');
-              
-              // Try to check if we still have a user
-              const { data: userData } = await supabase.auth.getUser();
-              
-              showAlert(
-                'Authentication Issue', 
-                `Your session appears to be invalid (AuthSessionMissingError).\n\n` +
-                `User data: ${userData.user ? 'Available' : 'Missing'}\n\n` +
-                `Please try logging out and logging back in to resolve this issue.`
-              );
-              return;
-            }
-            
-            showAlert('Session Refresh Failed', refreshError.message);
+          // Check connectivity
+          const connected = await isConnected();
+          if (!connected) {
+            Alert.alert(t('reminders.debug.testSupabase'), t('reminders.debug.networkOffline'));
             return;
           }
           
-          if (!refreshData.session) {
-            showAlert('Session Warning', 'No session returned after refresh attempt.');
+          // Try to verify session first
+          console.log('Verifying session before test...');
+          const sessionValid = await authContext.verifySession();
+          
+          if (!sessionValid) {
+            console.error('Session verification failed - session is invalid and could not be refreshed');
+            Alert.alert(
+              t('auth.error'), 
+              t('auth.sessionInvalid')
+            );
             return;
           }
           
-          // Show session information
-          showAlert(
-            'Session Information',
-            `Session refreshed successfully ✅\n\n` +
-            `User ID: ${refreshData.session.user.id}\n` +
-            `Expires at: ${new Date(refreshData.session.expires_at! * 1000).toLocaleString()}\n` +
-            `Token length: ${refreshData.session.access_token.length} chars`
+          console.log('Testing Supabase connection...');
+          
+          // Check authentication 
+          const isAuth = await authService.isAuthenticated();
+          console.log('Authentication check:', isAuth ? t('reminders.debug.authenticated') : t('reminders.debug.notAuthenticated'));
+          
+          if (!isAuth) {
+            Alert.alert(t('reminders.debug.testSupabase'), t('auth.notAuthenticated'));
+            return;
+          }
+          
+          // Test Supabase query
+          console.log('Testing query to reminders table...');
+          const { data, error } = await supabase.from('reminders').select('count').limit(1);
+          
+          if (error) {
+            console.error('Query error:', error);
+            Alert.alert(t('reminders.debug.testFailed'), `${error.message}`);
+            return;
+          }
+          
+          console.log('Query success:', data);
+          
+          // Get user from Supabase
+          console.log('Getting user from Supabase...');
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          
+          if (userError) {
+            console.error('Get user error:', userError);
+            Alert.alert(t('reminders.debug.testFailed'), `${userError.message}`);
+            return;
+          }
+          
+          if (!userData.user) {
+            console.log('No user found in session');
+            Alert.alert(t('reminders.debug.testSupabase'), t('auth.noUserFound'));
+            return;
+          }
+          
+          console.log('User found:', userData.user.email);
+          console.log('User ID:', userData.user.id);
+          
+          // Success
+          Alert.alert(
+            t('reminders.debug.testSuccess'),
+            t('reminders.debug.supabaseConnected')
           );
-        } catch (error) {
-          console.error('Error during refresh:', error);
-          showAlert('Refresh Error', `Error: ${error instanceof Error ? error.message : String(error)}`);
+        } catch (err) {
+          console.error('Exception during Supabase test:', err);
+          Alert.alert(t('reminders.error'), `${err instanceof Error ? err.message : String(err)}`);
         }
-      } else {
-        // Show session information
-        showAlert(
-          'Session Information',
-          `Active session found ✅\n\n` +
-          `User ID: ${sessionData.session.user.id}\n` +
-          `Expires at: ${new Date(sessionData.session.expires_at! * 1000).toLocaleString()}\n` +
-          `Token length: ${sessionData.session.access_token.length} chars`
-        );
-      }
-    } catch (error) {
-      console.error('Error testing auth status:', error);
-      showAlert('Auth Test Error', `Error: ${error instanceof Error ? error.message : String(error)}`);
-    }
+      }}]
+    );
+  };
+  
+  const testAuth = async () => {
+    Alert.alert(
+      t('reminders.debug.testAuth'),
+      t('reminders.debug.checkingAuth'),
+      [{ text: 'OK', onPress: async () => {
+        try {
+          // Verify session and print detailed info
+          console.log('Verifying authentication session...');
+          
+          // First check isAuthenticated
+          const isAuth = await authService.isAuthenticated();
+          console.log('Authentication check:', isAuth ? t('reminders.debug.authenticated') : t('reminders.debug.notAuthenticated'));
+          
+          // Then check verifySession which attempts refreshing if needed
+          const sessionValid = await authContext.verifySession();
+          console.log('Session verification:', sessionValid ? t('reminders.debug.sessionValid') : t('reminders.debug.sessionInvalid'));
+          
+          // Get the session
+          const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+          
+          if (sessionError) {
+            console.error('Session error:', sessionError);
+            Alert.alert(t('auth.sessionError'), `${sessionError.message}`);
+            return;
+          }
+          
+          if (!sessionData.session) {
+            console.log('No session found');
+            Alert.alert(t('reminders.debug.testAuth'), t('auth.noSessionFound'));
+            return;
+          }
+          
+          // Print session details
+          const expiresAt = new Date((sessionData.session.expires_at || 0) * 1000);
+          const now = new Date();
+          const isExpired = now > expiresAt;
+          const minutesLeft = Math.round((expiresAt.getTime() - now.getTime()) / 60000);
+          
+          console.log('Session details:');
+          console.log('- User:', sessionData.session.user.email);
+          console.log('- Expires at:', expiresAt.toLocaleString());
+          console.log('- Is expired:', isExpired ? t('reminders.debug.yes') : t('reminders.debug.no'));
+          console.log('- Minutes left:', minutesLeft);
+          
+          // Get the user
+          const { data: userData, error: userError } = await supabase.auth.getUser();
+          
+          if (userError) {
+            console.error('Get user error:', userError);
+            Alert.alert(t('auth.error'), `${userError.message}`);
+            return;
+          }
+          
+          if (!userData.user) {
+            console.log('No user found');
+            Alert.alert(t('reminders.debug.testAuth'), t('auth.noUserFound'));
+            return;
+          }
+          
+          console.log('User details:');
+          console.log('- Email:', userData.user.email);
+          console.log('- ID:', userData.user.id);
+          
+          // Show alert with results
+          Alert.alert(
+            t('reminders.debug.authResults'),
+            `${t('reminders.debug.authenticated')}: ${isAuth ? t('reminders.debug.yes') : t('reminders.debug.no')}\n` +
+            `${t('reminders.debug.sessionValid')}: ${sessionValid ? t('reminders.debug.yes') : t('reminders.debug.no')}\n` +
+            `${t('reminders.debug.user')}: ${userData.user.email}\n` +
+            `${t('reminders.debug.expiresAt')}: ${expiresAt.toLocaleString()}\n` +
+            `${t('reminders.debug.minutesLeft')}: ${minutesLeft}\n` +
+            `${t('reminders.debug.isExpired')}: ${isExpired ? t('reminders.debug.yes') : t('reminders.debug.no')}`
+          );
+        } catch (err) {
+          console.error('Exception during auth test:', err);
+          Alert.alert(t('auth.error'), `${err instanceof Error ? err.message : String(err)}`);
+        }
+      }}]
+    );
   };
 
   return (
@@ -1802,51 +1841,25 @@ const RemindersScreen: React.FC = (): ReactElement => {
             icon="sync"
             style={{ marginBottom: 10 }}
           >
-            Debug Sync
+            {t('reminders.debug.syncDebug')}
           </Button>
           
           <Button
             mode="outlined"
-            onPress={async () => {
-              showAlert('Supabase Test', 'Testing connection and data structure...');
-              console.log('Running Supabase connection test...');
-              const success = await testSupabaseConnection();
-              showAlert(
-                'Supabase Test Results', 
-                success 
-                  ? '✅ Connection test successful! Check logs for details.' 
-                  : '❌ Connection test failed. Check logs for details.'
-              );
-              
-              // Also check table columns
-              const columns = await getTableColumns();
-              if (columns) {
-                console.log('Table columns:', columns);
-                console.log('Expected columns: id, user_id, medicine_name, dosage, dose_type, illness_type, frequency, start_date, end_date, times, is_active, notification_settings, doses, notifications, created_at, updated_at');
-                
-                // Check if all required columns exist
-                const requiredColumns = ['id', 'user_id', 'medicine_name', 'dosage', 'dose_type', 'frequency', 'start_date', 'end_date', 'times', 'is_active', 'notification_settings'];
-                const missingColumns = requiredColumns.filter(col => !columns.includes(col));
-                
-                if (missingColumns.length > 0) {
-                  console.error('❌ Missing required columns:', missingColumns);
-                  showAlert('Missing Columns', `Your Supabase table is missing these required columns: ${missingColumns.join(', ')}`);
-                }
-              }
-            }}
+            onPress={testSupabase}
             icon="database"
             style={{ marginBottom: 10 }}
           >
-            Test Supabase
+            {t('reminders.debug.testSupabase')}
           </Button>
           
           <Button
             mode="outlined"
-            onPress={testAuthStatus}
+            onPress={testAuth}
             icon="account-key"
             style={{ marginBottom: 10 }}
           >
-            Test Auth
+            {t('reminders.debug.testAuth')}
           </Button>
         </View>
       )}
