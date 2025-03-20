@@ -6,6 +6,7 @@ import { Alert } from 'react-native';
 import { useTranslation } from '../hooks/useTranslation';
 import { reminderService } from '../services/reminderService';
 import { profileService } from '../services/profileService';
+import { storeAuthCredentials } from '../services/supabase';
 
 interface AuthContextType {
   isAuthenticated: boolean;
@@ -266,6 +267,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
 
       if (session) {
+        // Store credentials for session recovery
+        await storeAuthCredentials(email, password);
+        
         setUser(session.user);
         setSession(session);
         setIsAuthenticated(true);

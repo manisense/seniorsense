@@ -4,10 +4,13 @@ import { Text, Surface, Card, Searchbar, IconButton, Divider, ActivityIndicator,
 import { useTheme } from '../../../context/ThemeContext';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { medicineHistoryService, MedicineHistoryItem } from '../../../services/supabase';
+import { medicineHistoryLocalService } from '../../../services/medicineHistoryLocalService';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../navigation/types';
 import { format } from 'date-fns';
+import NetInfo from '@react-native-community/netinfo';
+import supabase from '../../../services/supabase';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -20,19 +23,163 @@ const MedicineHistoryScreen = () => {
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [refreshing, setRefreshing] = useState(false);
+  const [isConnected, setIsConnected] = useState<boolean | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const syncMedicineData = async (force = false) => {
+    if (!isConnected && !force) {
+      console.log('Not connected to network, skipping sync from history screen');
+      return;
+    }
+    
+    console.log('Starting medicine history sync from history screen');
+    try {
+      if (isSyncing) {
+        console.log('Sync already in progress, skipping');
+        return;
+      }
+      
+      setIsSyncing(true);
+      
+      // First try bi-directional sync
+      const syncResult = await medicineHistoryService.syncMedicineHistory();
+      console.log('Medicine history sync result:', syncResult);
+      
+      // Even if sync wasn't successful, try to force-fetch from Supabase
+      if (!syncResult.success) {
+        console.log('Sync was not successful, attempting direct data fetch from Supabase');
+        
+        try {
+          // Try to verify the session is valid first
+          const { data: session } = await supabase.auth.getSession();
+          if (session?.session?.access_token) {
+            console.log('Session is valid, refreshing to ensure token is current');
+            await supabase.auth.refreshSession();
+          }
+          
+          // Now try to get data directly
+          const { data, error } = await supabase
+            .from('medicine_history')
+            .select('*')
+            .order('created_at', { ascending: false });
+            
+          if (!error && data && data.length > 0) {
+            console.log(`Successfully retrieved ${data.length} records directly from Supabase`);
+          } else if (error) {
+            console.error('Error fetching data directly:', error);
+          } else {
+            console.log('No data found in direct fetch');
+          }
+        } catch (directError) {
+          console.error('Error in direct fetch attempt:', directError);
+        }
+      }
+      
+      // Reload medicine history data after syncing
+      await loadHistory();
+      
+      setIsSyncing(false);
+    } catch (error) {
+      console.error('Error syncing medicine history:', error);
+      setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsConnected(state.isConnected);
+      if (state.isConnected) {
+        syncMedicineData();
+      }
+    });
+
     loadHistory();
+    syncMedicineData();
+
+    return () => {
+      unsubscribe();
+    };
   }, []);
 
   const loadHistory = async () => {
     setLoading(true);
     try {
-      const data = await medicineHistoryService.getMedicineHistory();
-      setHistory(data);
-      setFilteredHistory(data);
+      console.log('Loading medicine history in History screen...');
+      
+      // First try to get data from Supabase - always prioritize this
+      let supabaseData: MedicineHistoryItem[] = [];
+      if (isConnected) {
+        try {
+          console.log('Attempting to fetch data from Supabase first');
+          supabaseData = await medicineHistoryService.getMedicineHistory();
+          console.log(`Retrieved ${supabaseData.length} records from Supabase`);
+        } catch (supabaseError) {
+          console.error('Error loading from Supabase:', supabaseError);
+        }
+      }
+      
+      // If we got data from Supabase, use it as primary source
+      if (supabaseData.length > 0) {
+        console.log('Using Supabase data as primary source');
+        
+        // Also get local data to merge any items not yet synced
+        const localHistory = await medicineHistoryLocalService.getMedicineHistory();
+        
+        // Find local items not in Supabase data
+        const supabaseIds = new Set(supabaseData.map(item => item.id));
+        const localOnlyItems = localHistory.filter(item => !supabaseIds.has(item.id));
+        
+        console.log(`Found ${localOnlyItems.length} local-only items to merge`);
+        
+        // Merge Supabase and unique local items
+        const combinedData = [...supabaseData, ...localOnlyItems];
+        
+        // Sort by created_at date (newest first)
+        combinedData.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        // Save all Supabase items to local storage for offline access
+        console.log('Syncing Supabase data to local storage for offline access');
+        for (const item of supabaseData) {
+          await medicineHistoryLocalService.updateMedicineHistory(item);
+        }
+        
+        setHistory(combinedData);
+        setFilteredHistory(combinedData);
+        setLoading(false);
+        return;
+      }
+      
+      // If no Supabase data, fall back to local storage
+      console.log('No Supabase data found, falling back to local storage');
+      const localHistory = await medicineHistoryLocalService.getMedicineHistory();
+      console.log(`Retrieved ${localHistory.length} records from local storage`);
+      
+      // Sort by created_at date (newest first)
+      localHistory.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
+      
+      setHistory(localHistory);
+      setFilteredHistory(localHistory);
     } catch (error) {
       console.error('Error loading medicine history:', error);
+      
+      try {
+        // Fallback to local storage only in case of error
+        console.log('Error occurred, using local storage as fallback');
+        const localHistory = await medicineHistoryLocalService.getMedicineHistory();
+        
+        localHistory.sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+        
+        setHistory(localHistory);
+        setFilteredHistory(localHistory);
+      } catch (localError) {
+        console.error('Error loading local medicine history:', localError);
+      }
     } finally {
       setLoading(false);
     }
@@ -40,6 +187,9 @@ const MedicineHistoryScreen = () => {
 
   const handleRefresh = async () => {
     setRefreshing(true);
+    if (isConnected) {
+      await syncMedicineData();
+    }
     await loadHistory();
     setRefreshing(false);
   };
@@ -69,20 +219,22 @@ const MedicineHistoryScreen = () => {
 
   const handleDeleteItem = async (id: string) => {
     try {
-      const success = await medicineHistoryService.deleteMedicineHistory(id);
-      if (success) {
-        // Remove from local state
-        const updatedHistory = history.filter(item => item.id !== id);
-        setHistory(updatedHistory);
-        setFilteredHistory(
-          searchQuery ? 
-            updatedHistory.filter(item => 
-              item.medicine_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-              item.response_text.toLowerCase().includes(searchQuery.toLowerCase())
-            ) : 
-            updatedHistory
-        );
+      await medicineHistoryLocalService.deleteMedicineHistory(id);
+      
+      if (isConnected) {
+        await medicineHistoryService.deleteMedicineHistory(id);
       }
+      
+      const updatedHistory = history.filter(item => item.id !== id);
+      setHistory(updatedHistory);
+      setFilteredHistory(
+        searchQuery ? 
+          updatedHistory.filter(item => 
+            item.medicine_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            item.response_text.toLowerCase().includes(searchQuery.toLowerCase())
+          ) : 
+          updatedHistory
+      );
     } catch (error) {
       console.error('Error deleting history item:', error);
     }

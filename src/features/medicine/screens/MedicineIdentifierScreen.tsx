@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, ReactNode } from 'react';
-import { View, StyleSheet, Image, ScrollView, Alert, ActivityIndicator, Share, TouchableOpacity, Platform, Modal } from 'react-native';
+import { View, StyleSheet, Image, ScrollView, Alert, ActivityIndicator, Share, TouchableOpacity, Platform, Modal, Linking } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
-import { Text, Button, Card, Surface, Snackbar, IconButton, Portal, Chip } from 'react-native-paper';
+import { Text, Button, Card, Surface, Snackbar, IconButton, Portal, Chip, Dialog, RadioButton } from 'react-native-paper';
 import * as ImagePicker from 'expo-image-picker';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../../context/ThemeContext';
@@ -17,6 +17,7 @@ import { medicineHistoryService } from '../../../services/supabase';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../../navigation/RootNavigator';
+import { medicineHistoryLocalService } from '../../../services/medicineHistoryLocalService';
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -72,6 +73,9 @@ const MedicineIdentifierScreen = () => {
   const [imageQuality, setImageQuality] = useState(0.8);
   const [imageBase64, setImageBase64] = useState<string | null>(null);
   const [savedToHistory, setSavedToHistory] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [medicineName, setMedicineName] = useState<string>('');
+  const [autoSpeak, setAutoSpeak] = useState(true);
 
   // Get API key from Constants
   const GEMINI_API_KEY = Constants.expoConfig?.extra?.GEMINI_API_KEY || process.env.GEMINI_API_KEY;
@@ -241,6 +245,7 @@ const MedicineIdentifierScreen = () => {
     
     setLoading(true);
     setSavedToHistory(false);
+    setMedicineName('');
     
     try {
       // Get user's preferred language
@@ -273,62 +278,32 @@ const MedicineIdentifierScreen = () => {
         }
       };
       
+      // Prepare the parts for the model
+      const parts = [
+        { text: prompt },
+        imagePart
+      ];
+      
       // Generate content
-      const result = await model.generateContent([prompt, imagePart]);
-      const response = await result.response;
-      const text = response.text();
+      const result = await model.generateContent({
+        contents: [{ role: 'user', parts }],
+      });
       
-      // Clean the text for display and speech
-      let cleanedText = text
-        .replace(/\*/g, '')
-        .replace(/\-/g, '')
-        .replace(/•/g, '')
-        .replace(/\n+/g, ' ')
-        .replace(/\s+/g, ' ')
-        .replace(/(\d+\.\s+)/g, '')  // Remove numbered list markers like "1. "
-        .replace(/([A-Za-z0-9])\:([A-Za-z0-9])/g, '$1: $2')  // Fix spacing after colons
-        .trim() || t('medicineIdentifier.noResultFound');
+      const response = result.response;
+      const responseText = response.text().trim();
       
-      // Remove common introductory phrases
-      cleanedText = cleanedText
-        .replace(/^(ज़रूर|जरूर|ज़रुर|जरुर),?\s+मैं\s+आपकी\s+मदद\s+कर\s+सकता\s+हूँ।?\s+/i, '')
-        .replace(/^मैं\s+आपकी\s+मदद\s+कर\s+सकता\s+हूँ।?\s+/i, '')
-        .replace(/^(Sure|I can help you|Let me help you|Let me explain|I'd be happy to help)\.?\s+/i, '')
-        .replace(/^(This is|What you're looking at is|This appears to be|This medicine is|Based on the image)\.?\s+/i, '')
-        .replace(/^(Generic name|Brand name|Uses|Dosage|Side effects):\s+/i, '')
-        .trim();
+      // Set result and extract a medicine name for saving
+      setResult(responseText);
       
-      setResult(cleanedText);
+      // Extract medicine name from the first sentence (limited to 50 chars)
+      const firstSentence = responseText.split('.')[0];
+      const extractedName = firstSentence.length > 50 
+        ? firstSentence.substring(0, 50) + '...' 
+        : firstSentence;
+      setMedicineName(extractedName);
       
-      // Save to history
-      try {
-        // Extract medicine name from the first sentence
-        const medicineName = cleanedText.split('.')[0].trim();
-        
-        // Save to Supabase
-        const historyItem = await medicineHistoryService.saveMedicineHistory(
-          medicineName,
-          cleanedText,
-          image
-        );
-        
-        if (historyItem) {
-          setSavedToHistory(true);
-          console.log('Saved to history with ID:', historyItem.id);
-        }
-      } catch (historyError) {
-        console.error('Error saving to history:', historyError);
-        // Continue even if saving to history fails
-      }
-      
-      // Automatically speak the result
-      try {
-        const ttsLang = getTtsLanguageCode(selectedLanguage);
-        await Tts.setDefaultLanguage(ttsLang);
-        Tts.speak(cleanedText);
-      } catch (error) {
-        console.error('Error auto-speaking result:', error);
-      }
+      // Initialize TTS if auto-speak is enabled
+      initializeTts(responseText);
       
     } catch (error) {
       console.error('Error identifying medicine:', error);
@@ -463,7 +438,104 @@ const MedicineIdentifierScreen = () => {
 
   // View history
   const viewHistory = () => {
-    navigation.navigate('MedicineHistory');
+    navigation.navigate('MedicineHistory' as keyof RootStackParamList);
+  };
+
+  // Save medicine to history (both locally and Supabase)
+  const saveMedicine = async () => {
+    if (!result) return;
+    
+    setIsSaving(true);
+    
+    try {
+      const name = medicineName || t('medicineIdentifier.unnamedMedicine');
+      
+      // Build metadata
+      const metadata = {
+        identificationDate: new Date().toISOString(),
+        deviceInfo: Platform.OS,
+      };
+      
+      console.log('Saving medicine locally:', name);
+      
+      // First try to save locally - this should always work
+      const localSaveResult = await medicineHistoryLocalService.saveMedicineHistory(
+        name,
+        result,
+        image,
+        selectedLanguage,
+        selectedLanguage, // identified language is the same as selected for now
+        false, // has_reminder
+        null, // reminder_id
+        null, // notes
+        metadata
+      );
+      
+      let supabaseSaveResult = null;
+      
+      // If user is connected, try saving to Supabase
+      if (isConnected) {
+        console.log('Attempting to save to Supabase...');
+        
+        try {
+          // First try direct save
+          supabaseSaveResult = await medicineHistoryService.saveMedicineHistory(
+            name,
+            result,
+            image,
+            selectedLanguage,
+            selectedLanguage, // identified language is the same as selected for now
+            false, // has_reminder
+            null, // reminder_id
+            null, // notes
+            metadata
+          );
+          
+          console.log('Supabase save result:', supabaseSaveResult ? 'Success' : 'Failed');
+          
+          // If direct save failed but we saved locally, try sync
+          if (!supabaseSaveResult && localSaveResult) {
+            console.log('Direct save failed, attempting sync...');
+            const syncResult = await medicineHistoryService.syncMedicineHistory();
+            console.log('Sync after save result:', syncResult);
+          }
+        } catch (supabaseError) {
+          console.error('Error with Supabase operations:', supabaseError);
+        }
+      }
+      
+      // Update UI - consider it saved if local save worked (which it should)
+      if (localSaveResult) {
+        setSavedToHistory(true);
+        showSnackbar(t('medicineIdentifier.savedToHistory'));
+      } else {
+        showSnackbar(t('common.error'));
+      }
+    } catch (error) {
+      console.error('Error saving medicine:', error);
+      showSnackbar(t('common.error'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Initialize Text-to-Speech
+  const initializeTts = async (text: string) => {
+    try {
+      // Get TTS language code
+      const ttsLang = getTtsLanguageCode(selectedLanguage);
+      
+      // Setup TTS
+      await Tts.setDefaultLanguage(ttsLang);
+      
+      // Auto-speak if enabled
+      if (autoSpeak) {
+        setIsSpeaking(true);
+        Tts.speak(text);
+      }
+    } catch (error) {
+      console.error('Error initializing TTS:', error);
+    }
   };
 
   // Render privacy dialog
@@ -651,50 +723,48 @@ const MedicineIdentifierScreen = () => {
                   <Text style={[styles.resultText, { color: theme.colors.text || '#000000' }]}>
                     {result}
                   </Text>
+                  
+                  <View style={styles.resultActions}>
+                    <Button
+                      mode="contained"
+                      icon={isSpeaking ? "volume-off" : "volume-high"}
+                      onPress={speakResult}
+                      style={styles.actionButton}
+                      loading={isSpeaking}
+                    >
+                      {isSpeaking ? t('common.stop') : t('medicineIdentifier.speak')}
+                    </Button>
+                    
+                    {!savedToHistory ? (
+                      <Button
+                        mode="contained"
+                        icon="content-save"
+                        onPress={saveMedicine}
+                        style={styles.actionButton}
+                        loading={isSaving}
+                      >
+                        {t('medicineIdentifier.save')}
+                      </Button>
+                    ) : (
+                      <Button
+                        mode="outlined"
+                        icon="check-circle"
+                        onPress={viewHistory}
+                        style={styles.actionButton}
+                      >
+                        {t('medicineIdentifier.viewSaved')}
+                      </Button>
+                    )}
+                  </View>
+                  
                   {savedToHistory && (
                     <Chip 
                       icon="check-circle" 
                       style={styles.savedChip}
                     >
-                      Saved to history
+                      {t('medicineIdentifier.savedToHistory')}
                     </Chip>
                   )}
-                  <View style={styles.resultActions}>
-                    <Button
-                      mode="contained-tonal"
-                      icon={isSpeaking ? "volume-off" : "volume-high"}
-                      onPress={speakResult}
-                      style={styles.actionButton}
-                    >
-                      {isSpeaking ? t('medicineIdentifier.stopSpeaking') : t('medicineIdentifier.speak')}
-                    </Button>
-                    <Button
-                      mode="contained-tonal"
-                      icon="content-copy"
-                      onPress={copyToClipboard}
-                      style={styles.actionButton}
-                    >
-                      {t('medicineIdentifier.copy')}
-                    </Button>
-                    <Button
-                      mode="contained-tonal"
-                      icon="share"
-                      onPress={shareResult}
-                      style={styles.actionButton}
-                    >
-                      {t('common.share')}
-                    </Button>
-                  </View>
-                  <View style={styles.actionButtonsContainer}>
-                    <Button
-                      mode="outlined"
-                      icon="refresh"
-                      onPress={resetIdentification}
-                      style={styles.button}
-                    >
-                      {t('common.tryAgain')}
-                    </Button>
-                  </View>
                 </Card.Content>
               </Card>
             )}
@@ -819,7 +889,8 @@ const styles = StyleSheet.create({
   resultActions: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginTop: 16,
+    marginBottom: 8,
   },
   actionButton: {
     flex: 1,
@@ -897,9 +968,9 @@ const styles = StyleSheet.create({
     justifyContent: 'flex-end',
   },
   savedChip: {
-    marginBottom: 16,
+    marginTop: 16,
+    backgroundColor: '#E8F5E9', // Light green background
     alignSelf: 'flex-start',
-    backgroundColor: '#E8F5E9',
   },
 });
 

@@ -15,12 +15,12 @@ Notifications.setNotificationHandler({
 });
 
 // Define types for triggers
-type DateTrigger = {
+export type DateTrigger = {
   seconds: number;
   repeats?: boolean;
 };
 
-type DailyTrigger = {
+export type DailyTrigger = {
   hour: number;
   minute: number;
   repeats?: boolean;
@@ -40,6 +40,19 @@ interface PendingNotification {
   attempts: number;
 }
 
+// Define the NotificationRequest type to match Expo's API
+type NotificationRequest = {
+  identifier: string;
+  content: {
+    title: string;
+    body: string;
+    data: Record<string, any>;
+    sound?: boolean | string;
+    badge?: number;
+  };
+  trigger: any;
+};
+
 export const notificationService = {
   /**
    * Request notification permissions
@@ -48,7 +61,7 @@ export const notificationService = {
     try {
       // For physical devices, we need to check if the device has notifications capabilities
       if (Device.isDevice) {
-        const { status: existingStatus } = await Notifications.getPermissionsAsync();
+        const { status: existingStatus } = await Notifications.requestPermissionsAsync();
         let finalStatus = existingStatus;
         
         if (existingStatus !== 'granted') {
@@ -95,6 +108,53 @@ export const notificationService = {
   },
   
   /**
+   * Process any pending notifications that failed to schedule previously
+   */
+  processPendingNotifications: async (): Promise<void> => {
+    try {
+      const pendingNotifications = await getPendingNotifications();
+      
+      if (pendingNotifications.length === 0) {
+        return;
+      }
+      
+      console.log(`Processing ${pendingNotifications.length} pending notifications`);
+      
+      for (const pendingNotification of pendingNotifications) {
+        try {
+          // Skip if already attempted too many times
+          if (pendingNotification.attempts >= 3) {
+            console.log('Max attempts reached for pending notification, skipping');
+            continue;
+          }
+          
+          // Try to schedule it
+          const notificationId = await notificationService.scheduleNotification(
+            pendingNotification.content,
+            pendingNotification.trigger
+          );
+          
+          if (notificationId) {
+            // Update with successful ID and remove from pending
+            pendingNotification.id = notificationId;
+            await removePendingNotification(
+              pendingNotification.content,
+              pendingNotification.trigger
+            );
+          }
+        } catch (err) {
+          console.error('Error processing pending notification:', err);
+          // Increment attempts
+          pendingNotification.attempts += 1;
+          await updatePendingNotification(pendingNotification);
+        }
+      }
+    } catch (error) {
+      console.error('Error processing pending notifications:', error);
+    }
+  },
+  
+  /**
    * Initialize notification service
    */
   initialize: async () => {
@@ -106,12 +166,12 @@ export const notificationService = {
       await notificationService.processPendingNotifications();
       
       // Set up notification received handler
-      const subscription1 = Notifications.addNotificationReceivedListener((notification) => {
+      const subscription1 = Notifications.addNotificationReceivedListener((notification: Notifications.Notification) => {
         console.log('Notification received:', notification);
       });
       
       // Set up notification response handler
-      const subscription2 = Notifications.addNotificationResponseReceivedListener((response) => {
+      const subscription2 = Notifications.addNotificationResponseReceivedListener((response: Notifications.NotificationResponse) => {
         console.log('Notification response received:', response);
         const { notification } = response;
         // Handle user interaction with notification
@@ -165,7 +225,9 @@ export const notificationService = {
       // Use pill-reminders channel for Android
       if (Platform.OS === 'android') {
         notificationContent.channelId = 'pill-reminders';
+        // @ts-ignore - vibrationPattern is available on Android
         notificationContent.vibrationPattern = [0, 250, 250, 250, 250, 250];
+        // @ts-ignore - color is available on Android
         notificationContent.color = '#2563EB';
       }
       
@@ -201,164 +263,72 @@ export const notificationService = {
         // Store the notification ID for later reference
         await storeNotificationId(notificationId);
         
-        // Remove from pending notifications if it was there
-        await removePendingNotification(content, trigger);
-        
         return notificationId;
-      } catch (scheduleError) {
-        // If scheduling fails, store it for later attempts
-        console.error('Failed to schedule notification, storing for retry:', scheduleError);
+      } catch (error) {
+        console.error('Failed to schedule notification:', error);
+        
+        // Store as pending notification to try again later
         await storePendingNotification(content, trigger);
-        return 'pending_' + new Date().getTime().toString();
+        
+        throw error;
       }
     } catch (error) {
-      console.error('Error scheduling notification:', error);
-      // Store failed notification for later retry
-      await storePendingNotification(content, trigger);
-      return 'pending_' + new Date().getTime().toString();
-    }
-  },
-  
-  /**
-   * Process any pending notifications that failed to schedule previously
-   */
-  processPendingNotifications: async (): Promise<void> => {
-    try {
-      const pendingNotifications = await getPendingNotifications();
-      if (pendingNotifications.length === 0) {
-        return;
-      }
-      
-      console.log(`Processing ${pendingNotifications.length} pending notifications`);
-      
-      for (const notification of pendingNotifications) {
-        try {
-          // Increment attempts
-          notification.attempts += 1;
-          
-          // Skip if too many attempts (max 5)
-          if (notification.attempts > 5) {
-            console.log(`Skipping notification after ${notification.attempts} attempts`);
-            await removePendingNotification(notification.content, notification.trigger);
-            continue;
-          }
-          
-          // Try to schedule
-          const notificationId = await Notifications.scheduleNotificationAsync({
-            content: notification.content,
-            trigger: notification.trigger,
-          });
-          
-          console.log(`Successfully scheduled pending notification with ID: ${notificationId}`);
-          
-          // Store the notification ID and remove from pending
-          await storeNotificationId(notificationId);
-          await removePendingNotification(notification.content, notification.trigger);
-        } catch (error) {
-          console.error('Failed to process pending notification:', error);
-          // Update the attempts count in storage
-          await updatePendingNotification(notification);
-        }
-      }
-    } catch (error) {
-      console.error('Error processing pending notifications:', error);
+      console.error('Error in scheduleNotification:', error);
+      return '';
     }
   },
   
   /**
    * Cancel a specific notification
    */
-  cancelNotification: async (notificationId: string): Promise<boolean> => {
+  cancelNotification: async (notificationId: string): Promise<void> => {
     try {
-      // Skip pending notifications (they're not yet scheduled)
-      if (notificationId.startsWith('pending_')) {
-        return true;
-      }
-      
       await Notifications.cancelScheduledNotificationAsync(notificationId);
-      console.log(`Cancelled notification with ID: ${notificationId}`);
-      
-      // Remove from storage
       await removeNotificationId(notificationId);
-      
-      return true;
+      console.log(`Cancelled notification with ID: ${notificationId}`);
     } catch (error) {
       console.error(`Error cancelling notification ${notificationId}:`, error);
-      return false;
     }
   },
   
   /**
    * Cancel all scheduled notifications
    */
-  cancelAllNotifications: async (): Promise<boolean> => {
+  cancelAllNotifications: async (): Promise<void> => {
     try {
-      // Get all stored notification IDs and cancel them individually
-      const storedIds = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATION_IDS);
-      if (storedIds) {
-        const ids = JSON.parse(storedIds);
-        console.log(`Cancelling ${ids.length} stored notifications`);
-        
-        for (const id of ids) {
-          try {
-            await Notifications.cancelScheduledNotificationAsync(id);
-          } catch (err) {
-            console.error(`Failed to cancel notification ${id}:`, err);
-          }
-        }
-      }
-      
-      console.log('Cancelled all scheduled notifications');
-      
-      // Clear storage
-      await AsyncStorage.removeItem(STORAGE_KEYS.NOTIFICATION_IDS);
-      await AsyncStorage.removeItem(STORAGE_KEYS.PENDING_NOTIFICATIONS);
-      
-      return true;
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      console.log('Cancelled all notifications');
     } catch (error) {
       console.error('Error cancelling all notifications:', error);
-      return false;
     }
   },
   
   /**
-   * Send a test notification immediately
+   * Test notification for development
    */
   testNotification: async (): Promise<string> => {
-    try {
-      // Set up notification channels if needed
-      await notificationService.setupNotificationChannels();
-      
-      const notificationContent = {
-        title: '🔔 Test Notification',
-        body: 'This is a test notification to verify your settings are working correctly.',
-        sound: 'default',
-        data: { type: 'test' },
-      };
-      
-      // Schedule for 2 seconds from now
-      const trigger = { seconds: 2 };
-      
-      const notificationId = await notificationService.scheduleNotification(
-        notificationContent,
-        trigger
-      );
-      
-      console.log(`Scheduled test notification with ID: ${notificationId}`);
-      return notificationId;
-    } catch (error) {
-      console.error('Error sending test notification:', error);
-      throw error;
-    }
+    const now = new Date();
+    const content = {
+      title: 'Test Notification',
+      body: `This is a test notification sent at ${now.toLocaleTimeString()}`,
+      data: { type: 'test' },
+    };
+    
+    // Send in 5 seconds
+    const trigger: DateTrigger = {
+      seconds: 5,
+    };
+    
+    return await notificationService.scheduleNotification(content, trigger);
   },
   
   /**
-   * Get all pending notifications that failed to schedule
+   * Get the count of pending notifications
    */
   getPendingNotificationsCount: async (): Promise<number> => {
     try {
-      const pendingNotifications = await getPendingNotifications();
-      return pendingNotifications.length;
+      const notifications = await Notifications.getAllScheduledNotificationsAsync();
+      return notifications.length;
     } catch (error) {
       console.error('Error getting pending notification count:', error);
       return 0;
@@ -366,9 +336,9 @@ export const notificationService = {
   },
   
   /**
-   * Get all scheduled notifications (for debugging)
+   * Get all scheduled notifications
    */
-  getScheduledNotifications: async (): Promise<Notifications.NotificationRequest[]> => {
+  getScheduledNotifications: async (): Promise<NotificationRequest[]> => {
     try {
       return await Notifications.getAllScheduledNotificationsAsync();
     } catch (error) {
@@ -396,11 +366,12 @@ async function storeNotificationId(notificationId: string) {
 async function removeNotificationId(notificationId: string) {
   try {
     const storedIds = await AsyncStorage.getItem(STORAGE_KEYS.NOTIFICATION_IDS);
-    if (storedIds) {
-      const ids = JSON.parse(storedIds);
-      const filteredIds = ids.filter((id: string) => id !== notificationId);
-      await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATION_IDS, JSON.stringify(filteredIds));
-    }
+    if (!storedIds) return;
+    
+    const ids = JSON.parse(storedIds);
+    const filteredIds = ids.filter((id: string) => id !== notificationId);
+    
+    await AsyncStorage.setItem(STORAGE_KEYS.NOTIFICATION_IDS, JSON.stringify(filteredIds));
   } catch (error) {
     console.error('Error removing notification ID:', error);
   }
@@ -443,24 +414,22 @@ async function getPendingNotifications(): Promise<PendingNotification[]> {
 
 async function updatePendingNotification(pendingNotification: PendingNotification) {
   try {
-    const pendingNotifications = await getPendingNotifications();
+    const storedNotifications = await AsyncStorage.getItem(STORAGE_KEYS.PENDING_NOTIFICATIONS);
+    if (!storedNotifications) return;
     
-    // Find the notification by comparing content and created time
-    const updatedNotifications = pendingNotifications.map(notification => {
-      if (
-        notification.content.title === pendingNotification.content.title &&
-        notification.content.body === pendingNotification.content.body &&
-        notification.createdAt === pendingNotification.createdAt
-      ) {
-        return pendingNotification;
-      }
-      return notification;
-    });
+    const notifications: PendingNotification[] = JSON.parse(storedNotifications);
     
-    await AsyncStorage.setItem(
-      STORAGE_KEYS.PENDING_NOTIFICATIONS,
-      JSON.stringify(updatedNotifications)
+    // Find and replace the notification
+    const index = notifications.findIndex(
+      (n) => 
+        n.content.title === pendingNotification.content.title && 
+        n.content.body === pendingNotification.content.body
     );
+    
+    if (index !== -1) {
+      notifications[index] = pendingNotification;
+      await AsyncStorage.setItem(STORAGE_KEYS.PENDING_NOTIFICATIONS, JSON.stringify(notifications));
+    }
   } catch (error) {
     console.error('Error updating pending notification:', error);
   }
@@ -471,24 +440,17 @@ async function removePendingNotification(
   trigger: DateTrigger | DailyTrigger
 ) {
   try {
-    const pendingNotifications = await getPendingNotifications();
+    const storedNotifications = await AsyncStorage.getItem(STORAGE_KEYS.PENDING_NOTIFICATIONS);
+    if (!storedNotifications) return;
     
-    // Filter out the notification that matches this content
-    const filteredNotifications = pendingNotifications.filter(notification => {
-      return !(
-        notification.content.title === content.title &&
-        notification.content.body === content.body &&
-        JSON.stringify(notification.trigger) === JSON.stringify(trigger)
-      );
-    });
+    const notifications: PendingNotification[] = JSON.parse(storedNotifications);
     
-    if (pendingNotifications.length !== filteredNotifications.length) {
-      await AsyncStorage.setItem(
-        STORAGE_KEYS.PENDING_NOTIFICATIONS,
-        JSON.stringify(filteredNotifications)
-      );
-      console.log('Removed pending notification after successful scheduling');
-    }
+    // Remove matching notification
+    const filtered = notifications.filter(
+      (n) => !(n.content.title === content.title && n.content.body === content.body)
+    );
+    
+    await AsyncStorage.setItem(STORAGE_KEYS.PENDING_NOTIFICATIONS, JSON.stringify(filtered));
   } catch (error) {
     console.error('Error removing pending notification:', error);
   }

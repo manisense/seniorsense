@@ -1,47 +1,79 @@
 declare module 'expo-notifications' {
-  interface NotificationTriggerInput {
-    hour?: number;
-    minute?: number;
-    seconds?: number;
-    repeats?: boolean;
-    channelId?: string;
-  }
+  // Basic types
+  export type NotificationRequest = {
+    identifier: string;
+    content: NotificationContent;
+    trigger: any;
+  };
 
-  interface NotificationContent {
+  export type NotificationContent = {
     title: string;
     body: string;
-    sound?: 'default' | null;
-    vibrate?: number[];
-  }
+    data: any;
+    sound?: string | boolean;
+    badge?: number;
+    color?: string;
+    vibrationPattern?: number[];
+    channelId?: string;
+  };
 
-  interface NotificationRequestInput {
-    content: NotificationContent;
-    trigger: NotificationTriggerInput;
-  }
+  export type NotificationContentInput = {
+    title: string;
+    body: string;
+    data?: any;
+    sound?: string | boolean;
+    badge?: number;
+    color?: string;
+    vibrationPattern?: number[];
+    channelId?: string;
+  };
 
-  interface NotificationPermissionsStatus {
-    status: 'granted' | 'denied' | 'undetermined';
-  }
+  export type NotificationTrigger = {
+    seconds?: number;
+    repeats?: boolean;
+    hour?: number;
+    minute?: number;
+  };
 
-  interface NotificationHandler {
+  export type NotificationResponse = {
+    notification: Notification;
+    actionIdentifier: string;
+    userText?: string;
+  };
+
+  export type Notification = {
+    date: number;
+    request: NotificationRequest;
+  };
+
+  // Function definitions
+  export function scheduleNotificationAsync(options: {
+    content: NotificationContentInput;
+    trigger: null | { seconds: number; } | { repeats?: boolean; hour: number; minute: number; };
+  }): Promise<string>;
+
+  export function cancelScheduledNotificationAsync(identifier: string): Promise<void>;
+  export function cancelAllScheduledNotificationsAsync(): Promise<void>;
+  export function getAllScheduledNotificationsAsync(): Promise<NotificationRequest[]>;
+  export function getPresentedNotificationsAsync(): Promise<NotificationRequest[]>;
+
+  export function addNotificationReceivedListener(
+    listener: (notification: Notification) => void
+  ): { remove: () => void };
+
+  export function addNotificationResponseReceivedListener(
+    listener: (response: NotificationResponse) => void
+  ): { remove: () => void };
+
+  export function setNotificationHandler(handler: {
     handleNotification: () => Promise<{
       shouldShowAlert: boolean;
       shouldPlaySound: boolean;
       shouldSetBadge: boolean;
+      priority?: 'max' | 'high' | 'low' | 'min' | 'default';
     }>;
-  }
+  }): void;
 
-  export function requestPermissionsAsync(): Promise<{ status: string }>;
-  export function setNotificationHandler(handler: NotificationHandler): Promise<void>;
-  export function scheduleNotificationAsync(options: {
-    content: {
-      title: string;
-      body: string;
-      sound?: string;
-    };
-    trigger: { seconds: number } | null;
-  }): Promise<string>;
-  export function cancelScheduledNotificationAsync(identifier: string): Promise<void>;
   export function setNotificationChannelAsync(
     channelId: string,
     channelConfig: {
@@ -49,6 +81,9 @@ declare module 'expo-notifications' {
       importance: number;
       vibrationPattern?: number[];
       lightColor?: string;
+      sound?: string;
     }
-  ): Promise<void>;
+  ): Promise<any>;
+
+  export function requestPermissionsAsync(): Promise<{ status: string; expires: string }>;
 }

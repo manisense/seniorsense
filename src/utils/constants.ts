@@ -9,7 +9,8 @@ export const STORAGE_KEYS = {
   EMERGENCY_CONTACTS: 'emergency_contacts',
   NOTIFICATION_IDS: 'notification_ids',
   PENDING_NOTIFICATIONS: 'pending_notifications',
-  SYNC_QUEUE: 'sync_queue'
+  SYNC_QUEUE: 'sync_queue',
+  MEDICINE_HISTORY: 'medicine_history'
 }; 
 
 export const MAX_CONTACTS = 5;
