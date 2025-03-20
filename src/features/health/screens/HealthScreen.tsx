@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl } from 'react-native';
+import { View, StyleSheet, FlatList, TouchableOpacity, RefreshControl, Alert } from 'react-native';
 import { Text, Searchbar, FAB, Card, ActivityIndicator, DefaultTheme, PaperProvider } from 'react-native-paper';
 import { useTranslation } from '../../../hooks/useTranslation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
@@ -75,13 +75,18 @@ export const HealthScreen = () => {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener('focus', () => {
-      if (isLoggedIn) {
-        loadMedicineHistory();
-      }
+      console.log('HealthScreen focused, reloading data');
+      
+      // Clear existing state to avoid seeing duplicates during loading
+      setMedicineHistory([]);
+      setFilteredHistory([]);
+      
+      // Reload data
+      loadMedicineHistory();
     });
     
     return unsubscribe;
-  }, [navigation, isLoggedIn]);
+  }, [navigation]);
 
   useEffect(() => {
     // Setup network connectivity listener
@@ -121,9 +126,9 @@ export const HealthScreen = () => {
       }
       
       // Also get local data in any case
-      // console.log('Fetching local medicine history');
-      // const localHistory = await medicineHistoryLocalService.getMedicineHistory();
-      // console.log(`Retrieved ${localHistory.length} records from local storage`);
+      console.log('Fetching local medicine history');
+      const localHistory = await medicineHistoryLocalService.getMedicineHistory();
+      console.log(`Retrieved ${localHistory.length} records from local storage`);
       
       // If we got data from Supabase, use it as primary source
       if (supabaseData.length > 0) {
@@ -131,45 +136,72 @@ export const HealthScreen = () => {
         
         // Find local items not in Supabase data
         const supabaseIds = new Set(supabaseData.map(item => item.id));
-        // const localOnlyItems = localHistory.filter(item => !supabaseIds.has(item.id));
+        const localOnlyItems = localHistory.filter(item => !supabaseIds.has(item.id));
         
-        // console.log(`Found ${localOnlyItems.length} local-only items to merge`);
+        console.log(`Found ${localOnlyItems.length} local-only items to merge`);
         
         // Merge Supabase and unique local items
-        //const combinedData = [...supabaseData, ...localOnlyItems];
+        const combinedData = [...supabaseData, ...localOnlyItems];
         
         // Sort by created_at date (newest first)
-        supabaseData.sort((a, b) => 
+        combinedData.sort((a, b) => 
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
         );
         
-        // Remove any potential duplicates (matching by id)
+        // Remove any potential duplicates by ID
         const uniqueItems = Array.from(
-          new Map(supabaseData.map(item => [item.id, item])).values()
+          new Map(combinedData.map(item => [item.id, item])).values()
         );
         
-        // IMPORTANT: We'll only update local items that already exist, not create new ones
-        // This prevents creating duplicate entries in local storage
-        for (const item of supabaseData) {
-          try {
-            // Only update existing items in local storage
-            // const existingItem = localHistory.find(localItem => localItem.id === item.id);
-            // if (existingItem) {
-            //   // Just update the item if it exists
-            //   await medicineHistoryLocalService.updateMedicineHistory(item);
-            // }
-          } catch (err) {
-            console.error('Error updating item in local storage:', err);
+        // Also remove duplicates by medicine name (case insensitive)
+        // This ensures we only show each medicine once in the list
+        const uniqueByName: MedicineHistoryItem[] = [];
+        const seenNames = new Set<string>();
+        
+        for (const item of uniqueItems) {
+          const lowerName = item.medicine_name.toLowerCase().trim();
+          if (!seenNames.has(lowerName)) {
+            seenNames.add(lowerName);
+            uniqueByName.push(item);
           }
         }
         
-        // Limit to recent items for the dashboard
-        const recentItems = uniqueItems.slice(0, 5);
-        setMedicineHistory(recentItems);
-        setFilteredHistory(recentItems);
+        // Save Supabase items to local storage to ensure they're available offline
+        // and especially for the detail view to work
+        for (const item of supabaseData) {
+          try {
+            // Check if the item already exists in local storage
+            const existingItem = localHistory.find(localItem => localItem.id === item.id);
+            
+            if (existingItem) {
+              // Update existing item
+              await medicineHistoryLocalService.updateMedicineHistory(item);
+            } else {
+              // Save new item to local storage
+              await medicineHistoryLocalService.saveMedicineHistory(
+                item.medicine_name,
+                item.response_text,
+                item.image_url,
+                item.language || 'en',
+                item.identified_language,
+                item.has_reminder,
+                item.reminder_id,
+                item.notes,
+                item.metadata,
+                item.user_id
+              );
+            }
+          } catch (err) {
+            console.error('Error syncing item to local storage:', err);
+          }
+        }
+        
+        // Display all unique medicines, not just the 5 most recent
+        setMedicineHistory(uniqueByName);
+        setFilteredHistory(uniqueByName);
         
         // Extract unique medicine names for auto-suggest
-        const uniqueNames = Array.from(new Set(recentItems.map(item => item.medicine_name)));
+        const uniqueNames = Array.from(seenNames);
         setSuggestions(uniqueNames);
         
         setLoading(false);
@@ -180,24 +212,34 @@ export const HealthScreen = () => {
       console.log('No Supabase data found, using local storage only');
       
       // Remove any potential duplicates (matching by id)
-      // const uniqueLocalItems = Array.from(
-      //   new Map(localHistory.map(item => [item.id, item])).values()
-      // );
+      const uniqueLocalItems = Array.from(
+        new Map(localHistory.map(item => [item.id, item])).values()
+      );
+      
+      // Also remove duplicates by medicine name (case insensitive)
+      const uniqueLocalByName: MedicineHistoryItem[] = [];
+      const seenLocalNames = new Set<string>();
+      
+      for (const item of uniqueLocalItems) {
+        const lowerName = item.medicine_name.toLowerCase().trim();
+        if (!seenLocalNames.has(lowerName)) {
+          seenLocalNames.add(lowerName);
+          uniqueLocalByName.push(item);
+        }
+      }
       
       // Sort by created_at date (newest first)
-      // uniqueLocalItems.sort((a, b) => 
-      //   new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      // );
+      uniqueLocalByName.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
       
-      // Limit to recent items for the Health dashboard
-      // const recentItems = uniqueLocalItems.slice(0, 5);
-      
-      // setMedicineHistory(recentItems);
-      // setFilteredHistory(recentItems);
+      // Display all unique medicines, not just the 5 most recent
+      setMedicineHistory(uniqueLocalByName);
+      setFilteredHistory(uniqueLocalByName);
       
       // Extract unique medicine names for auto-suggest feature
-      // const uniqueNames = Array.from(new Set(recentItems.map(item => item.medicine_name)));
-      // setSuggestions(uniqueNames);
+      const uniqueNames = Array.from(seenLocalNames);
+      setSuggestions(uniqueNames);
     } catch (error) {
       console.error('Error loading medicine history:', error);
     } finally {
@@ -341,7 +383,49 @@ export const HealthScreen = () => {
   };
 
   const handleViewMedicineDetail = (id: string) => {
-    navigation.navigate('MedicineHistoryDetail', { id });
+    // Before navigating, make sure the item exists in local storage
+    // This prevents issues when coming back to the list
+    medicineHistoryLocalService.getMedicineHistoryById(id)
+      .then(item => {
+        if (item) {
+          console.log(`Navigating to detail for medicine: ${item.medicine_name}`);
+          navigation.navigate('MedicineHistoryDetail', { id });
+        } else {
+          console.log(`Medicine with ID ${id} not found locally, attempting to fetch from Supabase`);
+          medicineHistoryService.getMedicineHistoryById(id)
+            .then(remoteItem => {
+              if (remoteItem) {
+                // Save to local storage first
+                medicineHistoryLocalService.saveMedicineHistory(
+                  remoteItem.medicine_name,
+                  remoteItem.response_text,
+                  remoteItem.image_url,
+                  remoteItem.language || 'en',
+                  remoteItem.identified_language,
+                  remoteItem.has_reminder,
+                  remoteItem.reminder_id,
+                  remoteItem.notes,
+                  remoteItem.metadata,
+                  remoteItem.user_id
+                ).then(() => {
+                  console.log(`Saved remote item to local storage and navigating to detail`);
+                  navigation.navigate('MedicineHistoryDetail', { id });
+                });
+              } else {
+                console.log(`Medicine with ID ${id} not found in Supabase either`);
+                // Show an alert that the item wasn't found
+                Alert.alert(
+                  'Not Found',
+                  'This medicine could not be found in your history.',
+                  [{ text: 'OK' }]
+                );
+              }
+            });
+        }
+      })
+      .catch(error => {
+        console.error('Error checking medicine before navigation:', error);
+      });
   };
 
   const formatHistoryDate = (dateString: string) => {
@@ -593,7 +677,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
     marginBottom: 20,
     padding: 20,
-    backgroundColor: '#000000',
+    backgroundColor: '#2563EB',
     borderRadius: 12,
     flexDirection: 'row',
     justifyContent: 'space-between',

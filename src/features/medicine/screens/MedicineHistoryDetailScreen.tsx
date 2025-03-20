@@ -56,21 +56,68 @@ const MedicineHistoryDetailScreen = () => {
     };
   }, []);
 
+  // Add an effect to clean up state when navigating away
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('beforeRemove', () => {
+      console.log('MedicineHistoryDetailScreen is being removed from the navigation stack');
+      // Clear state to be safe
+      setHistoryItem(null);
+      setNotes('');
+    });
+    
+    return unsubscribe;
+  }, [navigation]);
+
   const loadHistoryItem = async () => {
     setLoading(true);
     try {
+      console.log(`Loading medicine history item with ID: ${id}`);
+      
       // Try to get from local storage first
       let item = await medicineHistoryLocalService.getMedicineHistoryById(id);
       
+      if (item) {
+        console.log(`Found medicine item in local storage: ${item.medicine_name}`);
+      } else {
+        console.log('Medicine item not found in local storage');
+      }
+      
       // If not found locally and we have internet, try Supabase
-      // This no longer throws errors, just returns null if not authenticated
       if (!item && isConnected) {
+        console.log('Attempting to fetch medicine item from Supabase');
         item = await medicineHistoryService.getMedicineHistoryById(id);
+        
+        if (item) {
+          console.log(`Found medicine item in Supabase: ${item.medicine_name}`);
+          
+          // Save to local storage for future use
+          try {
+            await medicineHistoryLocalService.saveMedicineHistory(
+              item.medicine_name,
+              item.response_text,
+              item.image_url,
+              item.language || 'en',
+              item.identified_language,
+              item.has_reminder,
+              item.reminder_id,
+              item.notes,
+              item.metadata,
+              item.user_id
+            );
+            console.log('Successfully saved Supabase item to local storage');
+          } catch (saveError) {
+            console.error('Error saving Supabase item to local storage:', saveError);
+          }
+        } else {
+          console.log('Medicine item not found in Supabase either');
+        }
       }
       
       if (item) {
         setHistoryItem(item);
         setNotes(item.notes || '');
+      } else {
+        console.log('Medicine item not found anywhere');
       }
     } catch (error) {
       console.error('Error loading medicine history item:', error);
